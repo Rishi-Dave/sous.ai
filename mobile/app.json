@@ -16,7 +16,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.rishidave.souschef",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Sous Chef listens while you cook so you can log ingredients hands-free."
+        "NSMicrophoneUsageDescription": "Sous Chef listens while you cook so you can log ingredients hands-free.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -33,6 +34,18 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "d8277307-1dfa-44e4-a82b-283e49ad9d60"
+      }
+    },
+    "owner": "rdave009",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d8277307-1dfa-44e4-a82b-283e49ad9d60"
     }
   }
 }
