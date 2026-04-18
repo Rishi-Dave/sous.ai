@@ -5,8 +5,8 @@ Each test calls process_utterance() with a text-encoded audio stub and asserts
 the returned UtteranceResponse matches expected intent/fields.
 
 Run:
-    uv run pytest test_utterances.py -v
-    uv run pytest test_utterances.py -v --tb=short   # less noise
+    uv run pytest gemini_client/tests/test_utterances.py -v
+    uv run pytest gemini_client/tests/test_utterances.py -v --tb=short   # less noise
 
 Text input convention: wrap the spoken phrase as UTF-8 bytes.
 Swap for real audio bytes once recordings are available.
@@ -261,7 +261,6 @@ async def test_clarification_vague_triggers_follow_up():
     assert result.items
     garlic = result.items[0]
     assert_ingredient(garlic, "garlic")
-    # qty is None → ack should prompt for quantity
     if garlic.qty is None:
         assert "how much" in result.ack.lower() or "?" in result.ack
 

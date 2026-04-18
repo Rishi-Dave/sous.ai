@@ -35,18 +35,31 @@ async def fetch_nutrition(ingredient: str) -> dict:
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             EDAMAM_URL,
-            params={"app_id": app_id, "app_key": app_key, "ingr": ingredient},
+            params={
+                "app_id": app_id,
+                "app_key": app_key,
+                "ingr": ingredient,
+                "nutrition-type": "logging",
+            },
         )
         resp.raise_for_status()
         data = resp.json()
 
-    nutrients = data.get("totalNutrients", {})
+    # Nutrients live under ingredients[0].parsed[0].nutrients with this API tier
+    try:
+        nutrients = data["ingredients"][0]["parsed"][0]["nutrients"]
+    except (KeyError, IndexError):
+        nutrients = {}
+
+    def qty(key: str) -> float:
+        return round(nutrients.get(key, {}).get("quantity", 0), 1)
+
     return {
         "ingredient": ingredient,
-        "calories": data.get("calories", 0),
-        "protein_g": round(nutrients.get("PROCNT", {}).get("quantity", 0), 1),
-        "fat_g": round(nutrients.get("FAT", {}).get("quantity", 0), 1),
-        "carbs_g": round(nutrients.get("CHOCDF", {}).get("quantity", 0), 1),
+        "calories": round(qty("ENERC_KCAL")),
+        "protein_g": qty("PROCNT"),
+        "fat_g": qty("FAT"),
+        "carbs_g": qty("CHOCDF"),
     }
 
 

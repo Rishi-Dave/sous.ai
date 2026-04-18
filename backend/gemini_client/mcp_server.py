@@ -7,9 +7,12 @@ Compatible with Claude Desktop, Claude Code, and any MCP client.
 For Groq tool-calling integration, import from nutrition_tool directly.
 """
 
+from dotenv import find_dotenv, load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 from .nutrition_tool import fetch_nutrition
+
+load_dotenv(find_dotenv())
 
 mcp = FastMCP("sous-chef-nutrition")
 
