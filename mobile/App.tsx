@@ -1,7 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { createSession, IS_MOCK, sendUtterance } from './src/api/client';
+import { cancelRecording, startRecording, stopRecording } from './src/audio/recorder';
 import { initialState, reducer } from './src/state/machine';
 import type { Action, MachineState } from './src/state/machine';
 
@@ -25,8 +26,8 @@ function advanceActionFor(state: MachineState): Action | null {
 
 function advanceLabelFor(tag: MachineState['tag']): string {
   switch (tag) {
-    case 'Armed': return 'Simulate wake word';
-    case 'Listening': return 'Simulate silence (end utterance)';
+    case 'Armed': return 'Wake (tap to start recording)';
+    case 'Listening': return 'Stop recording';
     case 'Processing': return '…waiting for backend';
     case 'Speaking': return 'Simulate playback end';
     case 'Done': return 'Session finalized';
@@ -37,6 +38,8 @@ export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
+  const recordedBlobRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     createSession('demo-user')
@@ -45,17 +48,58 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (state.tag !== 'Listening') return;
+    setError(null);
+    startRecording().catch((e: unknown) => {
+      const name = e instanceof Error ? e.name : '';
+      if (name === 'NotAllowedError') {
+        setError('Mic permission denied. Grant access and tap Wake again.');
+      } else if (name === 'NotFoundError') {
+        setError('No microphone found on this device.');
+      } else {
+        setError(`startRecording failed: ${String(e)}`);
+      }
+      dispatch({ type: 'MANUAL_STOP' });
+    });
+    return () => {
+      // Fires when state leaves Listening. If we transitioned via SILENCE_DETECTED
+      // the button handler already stopped the recorder; this is a no-op then.
+      cancelRecording().catch(() => {});
+    };
+  }, [state.tag]);
+
+  useEffect(() => {
     if (state.tag !== 'Processing' || !sessionId) return;
-    // TODO(rh/mic-vad): source this blob from src/audio/recorder.ts::stopRecording() when
-    // the real mic is wired. `Blob` is a web-only global; this path is MOCK-only today.
-    const blob = new Blob([], { type: 'audio/wav' });
+    const blob = recordedBlobRef.current ?? new Blob([], { type: 'audio/wav' });
+    recordedBlobRef.current = null;
     sendUtterance(sessionId, blob)
       .then((response) => dispatch({ type: 'BACKEND_RESPONDED', response }))
-      .catch((e) => setError(String(e)));
+      .catch((e) => {
+        setError(String(e));
+        dispatch({ type: 'MANUAL_STOP' });
+      });
   }, [state.tag, sessionId]);
 
   const action = advanceActionFor(state);
-  const canAdvance = action !== null && state.tag !== 'Done';
+  const canAdvance = action !== null && state.tag !== 'Done' && !isBusy;
+
+  async function onAdvance() {
+    if (!action) return;
+    if (state.tag === 'Listening') {
+      setIsBusy(true);
+      try {
+        recordedBlobRef.current = await stopRecording();
+        dispatch({ type: 'SILENCE_DETECTED' });
+      } catch (e) {
+        setError(`stopRecording failed: ${String(e)}`);
+        dispatch({ type: 'MANUAL_STOP' });
+      } finally {
+        setIsBusy(false);
+      }
+      return;
+    }
+    dispatch(action);
+  }
 
   return (
     <SafeAreaView style={styles.root}>
@@ -69,7 +113,7 @@ export default function App() {
 
         <Pressable
           accessibilityLabel="Advance state"
-          onPress={() => action && dispatch(action)}
+          onPress={onAdvance}
           disabled={!canAdvance}
           style={[styles.advanceBtn, !canAdvance && styles.advanceBtnDisabled]}
         >
@@ -108,10 +152,36 @@ export default function App() {
         </View>
 
         {state.context.lastResponse && (
-          <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Last response</Text>
-            <Text style={styles.mono}>{JSON.stringify(state.context.lastResponse, null, 2)}</Text>
-          </View>
+          <>
+            <View style={styles.panel}>
+              <Text style={styles.panelTitle}>Intent</Text>
+              <Text style={styles.ingredient}>{state.context.lastResponse.intent}</Text>
+            </View>
+
+            {state.context.lastResponse.items && state.context.lastResponse.items.length > 0 && (
+              <View style={styles.panel}>
+                <Text style={styles.panelTitle}>Parsed items</Text>
+                {state.context.lastResponse.items.map((item, i) => (
+                  <Text key={`item-${i}`} style={styles.ingredient}>
+                    • {item.raw_phrase}
+                    {item.qty != null ? ` — ${item.qty}${item.unit ? ' ' + item.unit : ''}` : ''}
+                  </Text>
+                ))}
+              </View>
+            )}
+
+            {state.context.lastResponse.answer && (
+              <View style={styles.panel}>
+                <Text style={styles.panelTitle}>Answer</Text>
+                <Text style={styles.ingredient}>{state.context.lastResponse.answer}</Text>
+              </View>
+            )}
+
+            <View style={styles.panel}>
+              <Text style={styles.panelTitle}>Raw response</Text>
+              <Text style={styles.mono}>{JSON.stringify(state.context.lastResponse, null, 2)}</Text>
+            </View>
+          </>
         )}
 
         {error && <Text style={styles.error}>{error}</Text>}

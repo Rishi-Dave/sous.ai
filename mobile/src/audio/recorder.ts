@@ -1,5 +1,6 @@
-// TODO(rh/mic-vad): wire expo-av Audio.Recording in a later branch.
-// See docs/design.md §4 (Listening state) and root CLAUDE.md architecture rule 1.
+// Native stub. The web implementation lives in recorder.web.ts; Metro resolves
+// that on web, this on native. Phone wiring (expo-av Audio.Recording) lands in rh/phone-mic.
+// See docs/design.md §4 and root CLAUDE.md architecture rule 1.
 
 export async function startRecording(): Promise<void> {
   return;
@@ -7,4 +8,8 @@ export async function startRecording(): Promise<void> {
 
 export async function stopRecording(): Promise<Blob> {
   return new Blob([], { type: 'audio/wav' });
+}
+
+export async function cancelRecording(): Promise<void> {
+  return;
 }
