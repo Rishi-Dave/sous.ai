@@ -4,6 +4,7 @@ import os
 from dotenv import find_dotenv, load_dotenv
 from groq import AsyncGroq
 
+from .nutrition_tool import NUTRITION_TOOL, dispatch_tool_call
 from .schemas import ParsedIngredient, UtteranceResponse
 
 load_dotenv(find_dotenv())
@@ -116,15 +117,35 @@ async def process_utterance(
     if context:
         user_msg = f"{context}\n\n{user_msg}"
 
-    response = await client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_msg},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.1,
-    )
+    messages: list[dict] = [
+        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "user", "content": user_msg},
+    ]
 
-    raw = response.choices[0].message.content
-    return UtteranceResponse.model_validate(json.loads(raw))
+    # Agentic loop: let Groq call get_nutrition if it needs macro data.
+    for _ in range(5):
+        response = await client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=messages,
+            tools=[NUTRITION_TOOL],
+            tool_choice="auto",
+            temperature=0.1,
+        )
+        choice = response.choices[0]
+
+        if choice.finish_reason == "tool_calls":
+            assistant_msg = choice.message.model_dump(exclude_unset=True)
+            messages.append(assistant_msg)
+            for tc in choice.message.tool_calls:
+                result = await dispatch_tool_call(tc.function.name, tc.function.arguments)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                })
+            continue
+
+        raw = choice.message.content
+        return UtteranceResponse.model_validate(json.loads(raw))
+
+    raise RuntimeError("Tool-call loop exceeded max iterations")
