@@ -1,7 +1,5 @@
 # Claude Code personal config
 .claude/
-CLAUDE.md
-.github
 # Planning artifacts (personal)
 *.plan.md
 
