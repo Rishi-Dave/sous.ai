@@ -1,0 +1,35 @@
+# Claude Code personal config
+.claude/
+CLAUDE.md
+.github
+# Planning artifacts (personal)
+*.plan.md
+
+# Env
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Python
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+
+# Node / Expo
+**/node_modules/
+.expo/
+**/dist/
+**/build/
+**/*.log
+
+# Native
+mobile/ios/
+mobile/android/
+
+# OS
+.DS_Store
+Thumbs.db
