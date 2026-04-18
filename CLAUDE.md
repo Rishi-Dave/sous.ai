@@ -21,9 +21,9 @@ Distilled from design doc §4, §7. Full detail in the summary.
 
 ## Ownership boundaries (HARD)
 
-- **`backend/gemini_client/` is Atharva's.** Never edit. Never patch. Never "quickly fix" from Rishi's branch.
-- If integration reveals a bug there: write a note at `docs/notes/<YYYY-MM-DD>-gemini-client-<slug>.md` describing symptom, reproduction, and suggested direction. Open a GitHub issue tagged for Atharva. Do not work around by editing locally.
-- The `.claude/settings.json` deny list blocks edits under `**/gemini_client/**`. If the deny rule blocks you, that's the system working — don't try to route around it.
+- **`backend/gemini_client/` is Atharva's.** Atharva edits freely here. Rishi never edits it — a deny rule in his settings blocks him.
+- If you are assisting **Rishi** and integration reveals a bug in `gemini_client`: write a note at `docs/notes/<YYYY-MM-DD>-gemini-client-<slug>.md`, open a GitHub issue tagged for Atharva. Do not patch locally.
+- If you are assisting **Atharva**: gemini_client is your primary domain — edit, test, iterate.
 
 ## Git rules (HARD)
 
@@ -31,11 +31,11 @@ Distilled from design doc §4, §7. Full detail in the summary.
 
 Once the gate is crossed:
 
-1. **Never commit to `main`.** If on `main`, immediately `git switch -c rh/<slug>`.
-2. **Never `git push` directly** — the deny list will block it. When work is ready: show the diff to Rishi, summarize what would be pushed, let Rishi run `git push` himself.
+1. **Never commit to `main`.** If on `main`, immediately `git switch -c ad/<slug>` (Atharva) or `rh/<slug>` (Rishi).
+2. **Never `git push` directly** — the deny list will block it. When work is ready: show the diff, summarize what would be pushed, let the dev run `git push` themselves.
 3. **Never `git reset --hard`, never `--no-verify`, never `--no-gpg-sign`.** Deny list blocks these.
 4. **Never auto-resolve merge conflicts.** On conflict: stop, show the markers, wait.
-5. **Branch naming:** `rh/<short-slug>` (kebab-case, ≤4 words). Examples: `rh/utterance-endpoint`, `rh/mobile-state-machine`.
+5. **Branch naming:** `ad/<short-slug>` for Atharva, `rh/<short-slug>` for Rishi (kebab-case, ≤4 words). Examples: `ad/gemini-clarification`, `rh/utterance-endpoint`.
 6. **Commits:** small, focused, "why" over "what". Never `git add -A` or `git add .` — name specific files.
 7. **PRs as drafts.** Use the template at `.github/pull_request_template.md`.
 8. **Rebase, don't merge.** `git rebase origin/main` to pick up upstream.
@@ -103,7 +103,7 @@ When something fails:
 2. **Reproduce first.** No speculative patches. If you can't reproduce, say so.
 3. **Read the actual error + source**, don't pattern-match on the error string.
 4. **Hypothesis → experiment → update.** State it, design the smallest experiment, run it, refine.
-5. **Max 3 iterations**, then escalate to Rishi with what you tried and what's still unknown.
+5. **Max 3 iterations**, then escalate (open a GitHub issue or ping the other dev) with what you tried and what's still unknown.
 6. **Narrow scope when stuck** — `git log --oneline` and consider bisecting recent changes.
 7. **Never bypass.** Don't skip hooks, disable tests, or silence errors to "make it work."
 
@@ -118,7 +118,7 @@ A change is done only when **all** of the following are true:
 3. **`code-reviewer` subagent returns `status: pass`.**
 4. **If API contract touched, `integration-checker` returns `consistent: true`.**
 5. **No hardcoded secrets.** No `.env` in diff.
-6. **Branch is `rh/<slug>`, not `main`.**
+6. **Branch is `ad/<slug>` (Atharva) or `rh/<slug>` (Rishi), not `main`.**
 7. **PR template fields filled in.**
 
 Per-module DoD:

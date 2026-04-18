@@ -5,8 +5,11 @@ description = "Sous Chef backend — FastAPI"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.136.0",
+    "google-genai>=1.73.1",
+    "groq>=1.2.0",
     "pydantic>=2.13.2",
     "pydantic-settings>=2.13.1",
+    "pytest>=9.0.3",
     "python-multipart>=0.0.26",
     "uvicorn[standard]>=0.44.0",
 ]
