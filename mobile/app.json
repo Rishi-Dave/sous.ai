@@ -33,6 +33,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "d8277307-1dfa-44e4-a82b-283e49ad9d60"
+      }
+    },
+    "owner": "rdave009"
   }
 }
