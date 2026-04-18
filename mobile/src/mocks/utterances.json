@@ -1,0 +1,40 @@
+[
+  {
+    "intent": "add_ingredient",
+    "ack_audio_url": "mock://ack/olive-oil.mp3",
+    "items": [
+      { "name": "olive oil", "qty": 1, "unit": "tsp", "raw_phrase": "a splash of olive oil" }
+    ],
+    "current_ingredients": [
+      { "name": "olive oil", "qty": 1, "unit": "tsp", "raw_phrase": "a splash of olive oil" }
+    ]
+  },
+  {
+    "intent": "add_ingredient",
+    "ack_audio_url": "mock://ack/garlic.mp3",
+    "items": [
+      { "name": "garlic", "qty": 3, "unit": "cloves", "raw_phrase": "three cloves of garlic" }
+    ],
+    "current_ingredients": [
+      { "name": "olive oil", "qty": 1, "unit": "tsp", "raw_phrase": "a splash of olive oil" },
+      { "name": "garlic", "qty": 3, "unit": "cloves", "raw_phrase": "three cloves of garlic" }
+    ]
+  },
+  {
+    "intent": "question",
+    "ack_audio_url": "mock://ack/pasta-question.mp3",
+    "answer": "About 200 grams for two people.",
+    "current_ingredients": [
+      { "name": "olive oil", "qty": 1, "unit": "tsp", "raw_phrase": "a splash of olive oil" },
+      { "name": "garlic", "qty": 3, "unit": "cloves", "raw_phrase": "three cloves of garlic" }
+    ]
+  },
+  {
+    "intent": "acknowledgment",
+    "ack_audio_url": "mock://ack/gotcha.mp3",
+    "current_ingredients": [
+      { "name": "olive oil", "qty": 1, "unit": "tsp", "raw_phrase": "a splash of olive oil" },
+      { "name": "garlic", "qty": 3, "unit": "cloves", "raw_phrase": "three cloves of garlic" }
+    ]
+  }
+]
