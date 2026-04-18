@@ -1,22 +1,14 @@
-# backend/gemini_client/ — ATHARVA-OWNED
+# backend/gemini_client/ — ATHARVA OWNS THIS
 
-## STOP
+This module is yours. Edit freely. Rishi's Claude Code has a deny rule that blocks him from touching it.
 
-**Do not edit any file in this tree.** This module is owned by Atharva and shipped as a pure Python interface the backend imports. Patching it locally breaks the integration contract and guarantees a merge mess at hour 16.
+## Your responsibilities
 
-## What you may do here
+- `client.py` — `process_utterance` implementation and Gemini prompt.
+- `schemas.py` — Pydantic types: `Intent`, `ParsedIngredient`, `UtteranceResponse`.
+- `test_utterances.py` — test harness. Must stay ≥80% accurate before Rishi integrates.
 
-- Run tests to verify integration: `cd backend/gemini_client && pytest test_utterances.py -v`.
-- Read source to understand the public interface (`process_utterance`, `UtteranceResponse`, `ParsedIngredient`, `Intent`).
-- Import from this module inside `backend/app/`.
-
-## What to do if a change is needed here
-
-1. Write a note describing the issue: `docs/notes/<YYYY-MM-DD>-gemini-client-<slug>.md`. Include: symptom, reproduction command, affected inputs, suggested fix direction (not a patch).
-2. Open a GitHub issue tagged for Atharva, linking the note.
-3. If it's blocking, ping Atharva directly — do not work around it by editing here.
-
-## Public interface (read-only reference)
+## Public contract (do not break without telling Rishi)
 
 ```python
 from gemini_client import process_utterance, UtteranceResponse, ParsedIngredient, Intent
@@ -28,4 +20,29 @@ async def process_utterance(
 ) -> UtteranceResponse: ...
 ```
 
-See `docs/design.md` §8 for the schema. If this drifts, it's a breaking change — flag it immediately.
+Any change to function signature or `UtteranceResponse` fields is a **breaking change** — ping Rishi before merging so he can update the mock in `backend/app/`.
+
+## Dev loop
+
+```bash
+cd backend/gemini_client
+uv run pytest test_utterances.py -v          # full harness
+uv run pytest test_utterances.py -x          # fast-fail
+```
+
+Run harness after every prompt change. Target ≥80% before handing off to integration.
+
+## Vague quantity mapping (§8)
+
+| phrase | normalised |
+|---|---|
+| splash | 1 tsp |
+| pinch | 0.125 tsp |
+| dash | 0.5 tsp |
+| drizzle | 1 tbsp |
+| handful | 0.5 cup |
+| to taste | null |
+
+## If integration reveals a bug
+
+Rishi opens an issue. He should never patch this directory himself. Coordinate via `docs/notes/<YYYY-MM-DD>-gemini-client-<slug>.md`.
