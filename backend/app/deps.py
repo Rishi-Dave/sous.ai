@@ -6,6 +6,7 @@ from supabase import Client
 
 from app.config import Settings
 from app.db import make_supabase_client
+from app.tts import ElevenLabsTTS
 
 
 @lru_cache
@@ -19,3 +20,6 @@ def get_gemini_client():
 
 def get_db(settings: Settings = Depends(get_settings)) -> Client:
     return make_supabase_client(settings)
+@lru_cache
+def get_tts() -> ElevenLabsTTS:
+    return ElevenLabsTTS(get_settings())

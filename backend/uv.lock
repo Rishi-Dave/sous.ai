@@ -286,6 +286,23 @@ wheels = [
 ]
 
 [[package]]
+name = "elevenlabs"
+version = "2.43.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "requests" },
+    { name = "typing-extensions" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d2/7f/35dd0389c4a1cfe410b0adac60de4dfca563e504dcb788d027e308961864/elevenlabs-2.43.0.tar.gz", hash = "sha256:17e6c0ba632b5f8aa49001c2f0aac839fd3be8feb13a32ba00239713d3519775", size = 542311, upload-time = "2026-04-13T10:53:56.812Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bd/9a/6bd4322645b584377d402600e9282860767c689aaad83df11673222b93f9/elevenlabs-2.43.0-py3-none-any.whl", hash = "sha256:e03ea06d7f3086e8acf240823d15b81c718faee0e8ee6943eb639afe27b74e85", size = 1484376, upload-time = "2026-04-13T10:53:54.771Z" },
+]
+
+[[package]]
 name = "fastapi"
 version = "0.136.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1405,6 +1422,7 @@ name = "sous-chef-backend"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "elevenlabs" },
     { name = "fastapi" },
     { name = "google-genai" },
     { name = "groq" },
@@ -1427,6 +1445,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "elevenlabs", specifier = ">=2.43.0" },
     { name = "fastapi", specifier = ">=0.136.0" },
     { name = "google-genai", specifier = ">=1.73.1" },
     { name = "groq", specifier = ">=1.2.0" },
