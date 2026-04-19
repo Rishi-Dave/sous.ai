@@ -53,7 +53,7 @@ async def process_utterance_endpoint(
     tts: ElevenLabsTTS = Depends(get_tts),
 ) -> UtteranceResponse:
     recipe_resp = db.table("recipes").select("pending_clarification").eq("recipe_id", session_id).maybe_single().execute()
-    if not recipe_resp.data:
+    if not recipe_resp or not recipe_resp.data:
         raise HTTPException(status_code=404, detail="Session not found")
 
     pending_clarification: str | None = recipe_resp.data.get("pending_clarification")
