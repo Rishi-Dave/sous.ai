@@ -92,6 +92,32 @@ describe('state machine — invalid transitions are no-ops', () => {
   });
 });
 
+describe('state machine — full voice loop re-arms cleanly', () => {
+  // Wake-word + VAD route. Both triggers fire the same events as the manual
+  // buttons did (WAKE_DETECTED, SILENCE_DETECTED), so this round-trip exercises
+  // the actual rh/wake-word flow.
+  it('cycles Armed → Listening → Processing → Speaking → Armed twice without leaking state', () => {
+    const events: Action[] = [
+      { type: 'WAKE_DETECTED' },
+      { type: 'SILENCE_DETECTED' },
+      { type: 'BACKEND_RESPONDED', response: utterance },
+      { type: 'PLAYBACK_ENDED' },
+      { type: 'WAKE_DETECTED' },
+      { type: 'SILENCE_DETECTED' },
+      { type: 'BACKEND_RESPONDED', response: utterance },
+      { type: 'PLAYBACK_ENDED' },
+    ];
+    const tags = ['Listening', 'Processing', 'Speaking', 'Armed', 'Listening', 'Processing', 'Speaking', 'Armed'];
+    let s = initialState;
+    events.forEach((evt, i) => {
+      s = reducer(s, evt);
+      expect(s.tag).toBe(tags[i]);
+    });
+    expect(s.context.lastResponse).toBe(utterance);
+    expect(s.context.currentIngredients).toEqual(utterance.current_ingredients);
+  });
+});
+
 describe('state machine — FINALIZE is terminal', () => {
   it('any state + FINALIZE → Done', () => {
     for (const tag of ['Armed', 'Listening', 'Processing', 'Speaking'] as const) {
