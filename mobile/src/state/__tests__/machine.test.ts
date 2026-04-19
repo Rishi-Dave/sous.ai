@@ -198,6 +198,27 @@ describe('state machine — session lifecycle', () => {
   });
 });
 
+describe('state machine — finish_recipe intent is a normal BACKEND_RESPONDED', () => {
+  it('Processing + BACKEND_RESPONDED(finish_recipe) → Speaking with intent stored', () => {
+    const finishResponse: UtteranceResponse = {
+      intent: 'finish_recipe',
+      ack_audio_url: 'mock://ack/finish.mp3',
+      current_ingredients: [
+        { name: 'olive oil', qty: 1, unit: 'tsp', raw_phrase: 'a splash of olive oil' },
+      ],
+    };
+    const next = reducer(stateWith('Processing'), {
+      type: 'BACKEND_RESPONDED',
+      response: finishResponse,
+    });
+    // Reducer is intent-agnostic: the auto-nav behavior lives in the cooking
+    // screen, not the reducer. This test locks that contract in.
+    expect(next.tag).toBe('Speaking');
+    expect(next.context.lastResponse?.intent).toBe('finish_recipe');
+    expect(next.context.currentIngredients).toEqual(finishResponse.current_ingredients);
+  });
+});
+
 describe('state machine — FINALIZE is terminal', () => {
   it('any state + FINALIZE → Done', () => {
     for (const tag of ['Armed', 'Listening', 'Processing', 'Speaking'] as const) {

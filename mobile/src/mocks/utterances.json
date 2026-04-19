@@ -21,12 +21,25 @@
     ]
   },
   {
+    "intent": "add_ingredient",
+    "ack_audio_url": "mock://ack/pasta.mp3",
+    "items": [
+      { "name": "pasta", "qty": 200, "unit": "g", "raw_phrase": "200 grams of pasta" }
+    ],
+    "current_ingredients": [
+      { "name": "olive oil", "qty": 1, "unit": "tsp", "raw_phrase": "a splash of olive oil" },
+      { "name": "garlic", "qty": 3, "unit": "cloves", "raw_phrase": "three cloves of garlic" },
+      { "name": "pasta", "qty": 200, "unit": "g", "raw_phrase": "200 grams of pasta" }
+    ]
+  },
+  {
     "intent": "question",
     "ack_audio_url": "mock://ack/pasta-question.mp3",
     "answer": "About 200 grams for two people.",
     "current_ingredients": [
       { "name": "olive oil", "qty": 1, "unit": "tsp", "raw_phrase": "a splash of olive oil" },
-      { "name": "garlic", "qty": 3, "unit": "cloves", "raw_phrase": "three cloves of garlic" }
+      { "name": "garlic", "qty": 3, "unit": "cloves", "raw_phrase": "three cloves of garlic" },
+      { "name": "pasta", "qty": 200, "unit": "g", "raw_phrase": "200 grams of pasta" }
     ]
   },
   {
@@ -34,7 +47,18 @@
     "ack_audio_url": "mock://ack/gotcha.mp3",
     "current_ingredients": [
       { "name": "olive oil", "qty": 1, "unit": "tsp", "raw_phrase": "a splash of olive oil" },
-      { "name": "garlic", "qty": 3, "unit": "cloves", "raw_phrase": "three cloves of garlic" }
+      { "name": "garlic", "qty": 3, "unit": "cloves", "raw_phrase": "three cloves of garlic" },
+      { "name": "pasta", "qty": 200, "unit": "g", "raw_phrase": "200 grams of pasta" }
+    ]
+  },
+  {
+    "intent": "finish_recipe",
+    "ack_audio_url": "mock://ack/finish.mp3",
+    "answer": "Saving your recipe now.",
+    "current_ingredients": [
+      { "name": "olive oil", "qty": 1, "unit": "tsp", "raw_phrase": "a splash of olive oil" },
+      { "name": "garlic", "qty": 3, "unit": "cloves", "raw_phrase": "three cloves of garlic" },
+      { "name": "pasta", "qty": 200, "unit": "g", "raw_phrase": "200 grams of pasta" }
     ]
   }
 ]

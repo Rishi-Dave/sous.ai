@@ -11,7 +11,7 @@ router = APIRouter()
 @router.get("/recipes/{recipe_id}", response_model=FinalizeResponse)
 def get_recipe(recipe_id: str, db: Client = Depends(get_db)) -> FinalizeResponse:
     recipe_resp = db.table("recipes").select("recipe_id").eq("recipe_id", recipe_id).maybe_single().execute()
-    if not recipe_resp.data:
+    if not recipe_resp or not recipe_resp.data:
         raise HTTPException(status_code=404, detail="Recipe not found")
 
     ingredients_resp = db.table("ingredients").select("*").eq("recipe_id", recipe_id).execute()
@@ -26,7 +26,7 @@ def get_recipe(recipe_id: str, db: Client = Depends(get_db)) -> FinalizeResponse
     ]
 
     macros_resp = db.table("macro_logs").select("*").eq("recipe_id", recipe_id).maybe_single().execute()
-    if macros_resp.data:
+    if macros_resp and macros_resp.data:
         m = macros_resp.data
         macros = MacroLog(
             calories=m["calories"],

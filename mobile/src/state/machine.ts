@@ -24,6 +24,11 @@ export type Action =
   | { type: 'BACKEND_RESPONDED'; response: UtteranceResponse }
   | { type: 'PLAYBACK_ENDED' }
   | { type: 'MANUAL_STOP' }
+  // The UI no longer dispatches FINALIZE — /finalize navigation is driven by
+  // CookingContext.setFinalizeResponse + router.push on the cooking screen.
+  // Kept here because the terminal Done state is still a valid contract (and
+  // Done's absorb-all behavior is load-bearing for tests); future flows may
+  // re-enable this path.
   | { type: 'FINALIZE' };
 
 export const initialState: MachineState = {
