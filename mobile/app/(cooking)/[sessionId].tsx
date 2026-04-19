@@ -175,9 +175,23 @@ export default function CookingScreen() {
       dispatch({ type: 'PLAYBACK_ENDED' });
       return;
     }
-    const fullUrl = url.startsWith('/') ? `${BACKEND_URL}${url}` : url;
     let cancelled = false;
     let rearmTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Mock utterances ship with mock:// URLs that expo-av can't play. Simulate
+    // the ack duration so the loop advances cleanly in the web-mock loop.
+    if (url.startsWith('mock://')) {
+      rearmTimer = setTimeout(
+        () => !cancelled && dispatch({ type: 'PLAYBACK_ENDED' }),
+        PLAYBACK_REARM_MS + 800,
+      );
+      return () => {
+        cancelled = true;
+        if (rearmTimer) clearTimeout(rearmTimer);
+      };
+    }
+
+    const fullUrl = url.startsWith('/') ? `${BACKEND_URL}${url}` : url;
 
     playAck(fullUrl)
       .catch((e: unknown) => {
