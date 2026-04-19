@@ -22,7 +22,7 @@ Nothing here is mocked for the demo. The `/utterance` path actually ships audio 
 
 ## Demo
 
-**Demo video:** [▶ pasta aglio e olio walk-through (YouTube Short)](https://youtube.com/shorts/0mSC3VxNl-k?feature=share)
+**Demo video:** [▶ full walk-through (YouTube Short)](https://youtube.com/shorts/0mSC3VxNl-k?feature=share)
 
 For judges who want to replay the demo without scrubbing video, here's the exact script:
 
