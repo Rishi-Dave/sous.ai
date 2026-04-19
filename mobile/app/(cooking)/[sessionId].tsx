@@ -90,7 +90,8 @@ export default function CookingScreen() {
       if (cancelled) return;
       dispatch({ type: 'WAKE_DETECTED' });
     }).catch((e: unknown) => {
-      setError(`armPorcupine failed: ${String(e)}`);
+      // Swallow — no Picovoice key in dev, user taps the mic instead of saying "hey sous".
+      console.warn('armPorcupine failed:', String(e));
     });
     return () => {
       cancelled = true;
