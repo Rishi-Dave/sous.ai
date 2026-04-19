@@ -32,7 +32,7 @@ Distilled from design doc §4, §7. Full detail in the summary.
 Once the gate is crossed:
 
 1. **Never commit to `main`.** If on `main`, immediately `git switch -c ad/<slug>` (Atharva) or `rh/<slug>` (Rishi).
-2. **Never `git push` directly** — the deny list will block it. When work is ready: show the diff, summarize what would be pushed, let the dev run `git push` themselves.
+2. **`git push` is allowed; `git push --force` is not** — the deny list still blocks force push. Before any push, show the diff + one-sentence summary of what's going out so the dev can object before it hits the remote.
 3. **Never `git reset --hard`, never `--no-verify`, never `--no-gpg-sign`.** Deny list blocks these.
 4. **Never auto-resolve merge conflicts.** On conflict: stop, show the markers, wait.
 5. **Branch naming:** `ad/<short-slug>` for Atharva, `rh/<short-slug>` for Rishi (kebab-case, ≤4 words). Examples: `ad/gemini-clarification`, `rh/utterance-endpoint`.
