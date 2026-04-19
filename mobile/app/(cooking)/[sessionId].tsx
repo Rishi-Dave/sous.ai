@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   Pressable,
   SafeAreaView,
@@ -64,10 +64,17 @@ export default function CookingScreen() {
   const rid = firstParam(params.recipeId) ?? null;
 
   const router = useRouter();
-  const { state, dispatch, setFinalizeResponse, error, setError } = useCooking();
+  const {
+    state,
+    dispatch,
+    setFinalizeResponse,
+    finalizeStarted,
+    setFinalizeStarted,
+    error,
+    setError,
+  } = useCooking();
   const isFocused = useIsFocused();
   const recordedAudioRef = useRef<RecordedAudio | null>(null);
-  const [finalizeInFlight, setFinalizeInFlight] = useState(false);
 
   // Armed effect: arm Porcupine; dispatch WAKE_DETECTED on detection.
   useEffect(() => {
@@ -199,14 +206,15 @@ export default function CookingScreen() {
   }, [isFocused]);
 
   // Auto-nav on finish_recipe intent: run finalize() in parallel with ack TTS,
-  // then push to summary. Guarded by finalizeInFlight so this only fires once.
+  // then push to summary. Guarded by `finalizeStarted` (in context) so Undo →
+  // back doesn't re-trigger this effect even if the screen remounts.
   useEffect(() => {
     if (!isFocused) return;
-    if (finalizeInFlight) return;
+    if (finalizeStarted) return;
     if (state.tag !== 'Speaking') return;
     if (state.context.lastResponse?.intent !== 'finish_recipe') return;
     if (!sid) return;
-    setFinalizeInFlight(true);
+    setFinalizeStarted(true);
     const recipeName = deriveRecipeName(rid, state.context.currentIngredients);
     (async () => {
       try {
@@ -215,12 +223,12 @@ export default function CookingScreen() {
         router.push('/(cooking)/summary');
       } catch (e) {
         setError(`Finalize failed: ${String(e)}`);
-        setFinalizeInFlight(false);
+        setFinalizeStarted(false);
       }
     })();
   }, [
     isFocused,
-    finalizeInFlight,
+    finalizeStarted,
     state.tag,
     state.context.lastResponse,
     state.context.currentIngredients,
@@ -228,12 +236,13 @@ export default function CookingScreen() {
     rid,
     router,
     setFinalizeResponse,
+    setFinalizeStarted,
     setError,
   ]);
 
   const onFinish = async () => {
-    if (finalizeInFlight || !sid) return;
-    setFinalizeInFlight(true);
+    if (finalizeStarted || !sid) return;
+    setFinalizeStarted(true);
     const recipeName = deriveRecipeName(rid, state.context.currentIngredients);
     try {
       const res = await finalize(sid, recipeName);
@@ -241,7 +250,7 @@ export default function CookingScreen() {
       router.push('/(cooking)/summary');
     } catch (e) {
       setError(`Finalize failed: ${String(e)}`);
-      setFinalizeInFlight(false);
+      setFinalizeStarted(false);
     }
   };
 
@@ -292,14 +301,14 @@ export default function CookingScreen() {
       <View style={styles.footer}>
         <Pressable
           onPress={onFinish}
-          disabled={finalizeInFlight || ingredients.length === 0}
+          disabled={finalizeStarted || ingredients.length === 0}
           style={[
             styles.cta,
-            (finalizeInFlight || ingredients.length === 0) && styles.ctaDisabled,
+            (finalizeStarted || ingredients.length === 0) && styles.ctaDisabled,
           ]}
           accessibilityLabel="Finish cooking"
         >
-          <Text style={styles.ctaText}>{finalizeInFlight ? 'Saving…' : 'Finish cooking'}</Text>
+          <Text style={styles.ctaText}>{finalizeStarted ? 'Saving…' : 'Finish cooking'}</Text>
         </Pressable>
       </View>
     </SafeAreaView>

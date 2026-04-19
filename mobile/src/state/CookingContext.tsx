@@ -13,6 +13,11 @@ export interface CookingContextValue {
   dispatch: React.Dispatch<Action>;
   finalizeResponse: FinalizeResponse | null;
   setFinalizeResponse: (r: FinalizeResponse | null) => void;
+  // Set the moment we call finalize(); persists across cooking-screen remounts
+  // so Undo → back → cooking doesn't re-trigger the finish_recipe auto-nav
+  // effect (which keys on state.tag==='Speaking' + intent==='finish_recipe').
+  finalizeStarted: boolean;
+  setFinalizeStarted: (v: boolean) => void;
   error: string | null;
   setError: (e: string | null) => void;
 }
@@ -22,10 +27,20 @@ const Ctx = createContext<CookingContextValue | null>(null);
 export function CookingProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [finalizeResponse, setFinalizeResponse] = useState<FinalizeResponse | null>(null);
+  const [finalizeStarted, setFinalizeStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
     <Ctx.Provider
-      value={{ state, dispatch, finalizeResponse, setFinalizeResponse, error, setError }}
+      value={{
+        state,
+        dispatch,
+        finalizeResponse,
+        setFinalizeResponse,
+        finalizeStarted,
+        setFinalizeStarted,
+        error,
+        setError,
+      }}
     >
       {children}
     </Ctx.Provider>
