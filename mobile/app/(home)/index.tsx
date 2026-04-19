@@ -52,55 +52,57 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <View style={styles.top}>
-        <Text style={styles.eyebrow}>N° 01 · Cookbook</Text>
-        <Text style={styles.dateline}>{today}</Text>
-      </View>
-
-      <View style={styles.hero}>
-        <SprigMark size={28} />
-        <View style={styles.wordmarkBlock}>
-          <Wordmark variant="hero" />
-          <View style={styles.ruleRow}>
-            <RuleOff color="metallicGold" width={72} />
-          </View>
-          <Text style={styles.tagline}>
-            A voice-first sous chef.{'\n'}Ingredients, macros, and the quiet work of dinner —
-            written down for you.
-          </Text>
+      <View style={styles.container}>
+        <View style={styles.top}>
+          <Text style={styles.eyebrow}>N° 01 · Cookbook</Text>
+          <Text style={styles.dateline}>{today}</Text>
         </View>
-      </View>
 
-      <View style={styles.footer}>
-        <TimeOfDayGreeting />
-        <Pressable
-          onPress={onStart}
-          disabled={busy}
-          accessibilityLabel="Start cooking"
-          style={({ pressed }) => [
-            styles.cta,
-            busy && styles.ctaDisabled,
-            pressed && styles.ctaPressed,
-          ]}
-        >
-          {busy ? (
-            <View style={styles.ctaInner}>
-              <Text style={styles.ctaText}>Starting</Text>
-              <BusyDots />
+        <View style={styles.hero}>
+          <SprigMark size={28} />
+          <View style={styles.wordmarkBlock}>
+            <Wordmark variant="hero" />
+            <View style={styles.ruleRow}>
+              <RuleOff color="metallicGold" width={72} />
             </View>
-          ) : (
-            <Text style={styles.ctaText}>Begin a session</Text>
-          )}
-        </Pressable>
-        <Pressable
-          onPress={() => router.push('/(cooking)/cookbook')}
-          accessibilityLabel="Open your cookbook"
-          style={({ pressed }) => [styles.cookbookLink, pressed && styles.cookbookLinkPressed]}
-          hitSlop={8}
-        >
-          <Text style={styles.cookbookLinkText}>Open your cookbook →</Text>
-        </Pressable>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+            <Text style={styles.tagline}>
+              A voice-first sous chef.{'\n'}Ingredients, macros, and the quiet work of dinner —
+              written down for you.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.footer}>
+          <TimeOfDayGreeting />
+          <Pressable
+            onPress={onStart}
+            disabled={busy}
+            accessibilityLabel="Start cooking"
+            style={({ pressed }) => [
+              styles.cta,
+              busy && styles.ctaDisabled,
+              pressed && styles.ctaPressed,
+            ]}
+          >
+            {busy ? (
+              <View style={styles.ctaInner}>
+                <Text style={styles.ctaText}>Starting</Text>
+                <BusyDots />
+              </View>
+            ) : (
+              <Text style={styles.ctaText}>Begin a session</Text>
+            )}
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/(cooking)/cookbook')}
+            accessibilityLabel="Open your cookbook"
+            style={({ pressed }) => [styles.cookbookLink, pressed && styles.cookbookLinkPressed]}
+            hitSlop={8}
+          >
+            <Text style={styles.cookbookLinkText}>Open your cookbook →</Text>
+          </Pressable>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -153,7 +155,11 @@ function BusyDots() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.cream, paddingHorizontal: scale.xxxl },
+  root: { flex: 1, backgroundColor: colors.cream },
+  container: {
+    flex: 1,
+    paddingHorizontal: scale.xxxl,
+  },
   top: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -181,6 +187,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.button,
     paddingVertical: scale.lg,
     alignItems: 'center',
+    marginHorizontal: scale.sm,
   },
   ctaDisabled: { opacity: 0.7 },
   ctaPressed: { opacity: 0.85 },
