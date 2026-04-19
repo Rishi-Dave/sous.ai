@@ -254,8 +254,30 @@ export default function CookingScreen() {
     }
   };
 
-  const onWakeTap = () => {
-    if (state.tag === 'Armed') dispatch({ type: 'WAKE_DETECTED' });
+  // MicCard tap handler — branches on state.tag so manual-mode users can both
+  // start (Armed → wake) and stop (Listening → send) via the mic button.
+  // Mirrors the old App.tsx onAdvance path for Listening.
+  const onMicTap = async () => {
+    if (state.tag === 'Armed') {
+      dispatch({ type: 'WAKE_DETECTED' });
+      return;
+    }
+    if (state.tag === 'Listening') {
+      try {
+        try {
+          recordedAudioRef.current = await stopRecording();
+        } catch (e) {
+          // VAD or the 10s hard-cap may have already stopped the recorder. That
+          // path dispatches SILENCE_DETECTED itself, so this tap is a no-op.
+          if (e instanceof Error && /not recording/i.test(e.message)) return;
+          throw e;
+        }
+        dispatch({ type: 'SILENCE_DETECTED' });
+      } catch (e) {
+        setError(`stopRecording failed: ${String(e)}`);
+        dispatch({ type: 'MANUAL_STOP' });
+      }
+    }
   };
 
   const ms = micStateFor(state.tag);
@@ -271,7 +293,7 @@ export default function CookingScreen() {
         subtitle="Say 'hey sous' or tap the mic to add ingredients"
       />
       <ScrollView contentContainerStyle={styles.body}>
-        {ms ? <MicCard state={ms} assistantText={assistantText} onTap={onWakeTap} /> : null}
+        {ms ? <MicCard state={ms} assistantText={assistantText} onTap={onMicTap} /> : null}
 
         <Text style={styles.eyebrow}>
           Ingredients{ingredients.length ? ` (${ingredients.length})` : ''}

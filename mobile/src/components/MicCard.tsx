@@ -55,10 +55,13 @@ export function MicCard({ state, transcript, assistantText, onTap }: Props) {
 
       {state === 'listening' ? (
         <>
-          <View style={styles.micGoldFilled}>
-            <Mic size={28} color={colors.deepGreen} />
-          </View>
+          <Pressable onPress={onTap} accessibilityLabel="Stop listening" hitSlop={8}>
+            <View style={styles.micGoldFilled}>
+              <Mic size={28} color={colors.deepGreen} />
+            </View>
+          </Pressable>
           <Text style={styles.eyebrow}>Listening</Text>
+          <Text style={styles.label}>Tap when you're done</Text>
           {transcript ? <Text style={styles.transcript}>{transcript}</Text> : null}
         </>
       ) : null}
