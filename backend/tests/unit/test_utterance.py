@@ -33,10 +33,10 @@ class _FakeTTS:
         yield b""
 
 
-def _post_utterance(c: TestClient) -> dict:
+def _post_utterance(c: TestClient, session_id: str = "test-session") -> dict:
     r = c.post(
         "/utterance",
-        data={"session_id": "test-session"},
+        data={"session_id": session_id},
         files={"audio": ("a.wav", _silence_bytes(), "audio/wav")},
     )
     assert r.status_code == 200, r.text

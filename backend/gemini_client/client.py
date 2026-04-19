@@ -61,7 +61,7 @@ When intent is NOT add_ingredient:
 
 ## ack rules (HARD LIMIT: ≤12 words, spoken aloud — count every word)
 - add_ingredient with qty: confirm e.g. "Got it, two cloves of garlic." (7 words ✓)
-- add_ingredient with qty=null: add the item to items AND ask qty in ack e.g. "How much garlic would you like to add?" (8 words ✓)
+- add_ingredient with qty=null: add the item to items AND ask qty in ack. Phrase it as: "How much [ingredient] would you like to add?" e.g. "How much garlic would you like to add?" (8 words ✓)
 - add_ingredient, multiple items: summarise e.g. "Got it, three ingredients added." (5 words ✓)
 - question: short preview e.g. "Boil for 8 to 10 minutes." (6 words ✓)
 - acknowledgment / small_talk: short friendly reply e.g. "You're welcome!" (2 words ✓)
@@ -69,6 +69,20 @@ When intent is NOT add_ingredient:
 ## answer (question intent only)
 - MUST be populated when intent is question. 1-2 sentences of practical cooking advice.
 - null for all other intents.
+
+## Clarification replies (qty or unit was missing from a previous utterance)
+When context says 'You previously asked the user: "How much X ..."' you are waiting
+for the user to give a quantity for that ingredient. Their next utterance is the answer.
+- Parse the qty from their reply. Return intent=add_ingredient with items containing
+  the same ingredient name, the parsed qty, and the parsed unit.
+- If the user is uncertain ("I don't know", "not sure", "maybe", "I guess", no number):
+  choose a sensible culinary default (e.g. garlic→2 cloves, olive oil→2 tbsp,
+  salt→0.5 tsp, onion→1 medium, pasta→100 grams). Include it in items with that
+  estimated qty. Do NOT return qty=null. Ack should reflect the estimate, e.g.
+  "I'll use 2 cloves, a typical amount." (≤12 words)
+- Once an ingredient is successfully added, the clarification exchange is over.
+  Treat "Ingredients added so far" as the complete source of truth going forward.
+  Do not reference or remember the prior clarification conversation.
 
 Output ONLY the JSON object. Zero extra characters outside it."""
 
