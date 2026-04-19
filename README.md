@@ -216,7 +216,7 @@ sous-chef/
 └── .claude/                     scoped skills, memory, and subagent defs for Claude Code
 ```
 
-## What we built in 36 hours
+## What we built in 24 hours
 
 - [x] End-to-end voice loop: wake word → record → backend → TTS → re-arm
 - [x] 150ms ding on wake + 300ms re-arm buffer after TTS (the audio-consumer contract)
