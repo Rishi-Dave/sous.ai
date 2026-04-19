@@ -1,12 +1,15 @@
 import io
 import wave
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.deps import get_gemini_client, get_tts
 from app.main import app
 from gemini_client import Intent, ParsedIngredient, UtteranceResponse
 from tests.conftest import DEMO_USER_ID
+
+pytestmark = pytest.mark.usefixtures("supabase_env")
 
 
 def _silence_bytes() -> bytes:

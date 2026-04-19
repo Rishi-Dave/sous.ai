@@ -10,6 +10,7 @@ export interface ParsedIngredient {
   qty?: number | null;
   unit?: string | null;
   raw_phrase: string;
+  action?: 'add' | 'replace';
 }
 
 // Response shape from POST /utterance — backend/app/schemas/utterance.py.
@@ -19,6 +20,7 @@ export interface UtteranceResponse {
   items?: ParsedIngredient[];
   answer?: string;
   current_ingredients: ParsedIngredient[];
+  awaiting_clarification?: boolean;
 }
 
 // POST /sessions — backend/app/schemas/session.py.

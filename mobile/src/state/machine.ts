@@ -68,7 +68,10 @@ export function reducer(state: MachineState, action: Action): MachineState {
       return state;
 
     case 'Speaking':
-      if (action.type === 'PLAYBACK_ENDED') return { ...state, tag: 'Armed' };
+      if (action.type === 'PLAYBACK_ENDED') {
+        const nextTag = state.context.lastResponse?.awaiting_clarification ? 'Listening' : 'Armed';
+        return { ...state, tag: nextTag };
+      }
       if (action.type === 'MANUAL_STOP') return { ...state, tag: 'Armed' };
       return state;
   }

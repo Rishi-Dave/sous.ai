@@ -43,8 +43,19 @@ describe('state machine — valid transitions', () => {
     expect(next.tag).toBe('Speaking');
   });
 
-  it('Speaking → Armed on PLAYBACK_ENDED', () => {
+  it('Speaking → Armed on PLAYBACK_ENDED (no clarification pending)', () => {
     expect(reducer(stateWith('Speaking'), { type: 'PLAYBACK_ENDED' }).tag).toBe('Armed');
+  });
+
+  it('Speaking → Listening on PLAYBACK_ENDED when awaiting_clarification=true', () => {
+    const clarificationResponse: UtteranceResponse = {
+      ...utterance,
+      awaiting_clarification: true,
+    };
+    const speaking = stateWith('Speaking', {
+      context: { ...initialState.context, lastResponse: clarificationResponse },
+    });
+    expect(reducer(speaking, { type: 'PLAYBACK_ENDED' }).tag).toBe('Listening');
   });
 
   it('MANUAL_STOP returns to Armed from any active state', () => {
@@ -89,6 +100,101 @@ describe('state machine — invalid transitions are no-ops', () => {
   it.each(invalidCases)('%s + %p returns the same reference (no-op)', (tag, action) => {
     const s = stateWith(tag);
     expect(reducer(s, action)).toBe(s);
+  });
+});
+
+describe('state machine — clarification re-arm cycle', () => {
+  const clarificationResponse: UtteranceResponse = {
+    ...utterance,
+    awaiting_clarification: true,
+  };
+  const resolvedResponse: UtteranceResponse = {
+    ...utterance,
+    awaiting_clarification: false,
+  };
+
+  it('clarification Listening accepts SILENCE_DETECTED → Processing', () => {
+    const listening = stateWith('Listening');
+    expect(reducer(listening, { type: 'SILENCE_DETECTED' }).tag).toBe('Processing');
+  });
+
+  it('MANUAL_STOP from clarification Listening returns to Armed', () => {
+    const listening = stateWith('Listening');
+    expect(reducer(listening, { type: 'MANUAL_STOP' }).tag).toBe('Armed');
+  });
+
+  it('full clarification loop: Speaking(pending) → Listening → Processing → Speaking(resolved) → Armed', () => {
+    const speaking = stateWith('Speaking', {
+      context: { ...initialState.context, lastResponse: clarificationResponse },
+    });
+
+    const afterPlayback = reducer(speaking, { type: 'PLAYBACK_ENDED' });
+    expect(afterPlayback.tag).toBe('Listening');
+
+    const afterSilence = reducer(afterPlayback, { type: 'SILENCE_DETECTED' });
+    expect(afterSilence.tag).toBe('Processing');
+
+    const afterResponse = reducer(afterSilence, {
+      type: 'BACKEND_RESPONDED',
+      response: resolvedResponse,
+    });
+    expect(afterResponse.tag).toBe('Speaking');
+
+    const afterResolved = reducer(afterResponse, { type: 'PLAYBACK_ENDED' });
+    expect(afterResolved.tag).toBe('Armed');
+  });
+
+  it('awaiting_clarification=false (explicit) goes to Armed, not Listening', () => {
+    const speaking = stateWith('Speaking', {
+      context: { ...initialState.context, lastResponse: resolvedResponse },
+    });
+    expect(reducer(speaking, { type: 'PLAYBACK_ENDED' }).tag).toBe('Armed');
+  });
+
+  it('context carries lastResponse through clarification Listening state', () => {
+    const speaking = stateWith('Speaking', {
+      context: { ...initialState.context, lastResponse: clarificationResponse },
+    });
+    const listening = reducer(speaking, { type: 'PLAYBACK_ENDED' });
+    expect(listening.context.lastResponse).toBe(clarificationResponse);
+  });
+});
+
+describe('state machine — session lifecycle', () => {
+  it('full golden-path journey: Armed → Listening → Processing → Speaking → Armed', () => {
+    let state = initialState;
+    state = reducer(state, { type: 'WAKE_DETECTED' });
+    expect(state.tag).toBe('Listening');
+    state = reducer(state, { type: 'SILENCE_DETECTED' });
+    expect(state.tag).toBe('Processing');
+    state = reducer(state, { type: 'BACKEND_RESPONDED', response: utterance });
+    expect(state.tag).toBe('Speaking');
+    state = reducer(state, { type: 'PLAYBACK_ENDED' });
+    expect(state.tag).toBe('Armed');
+  });
+
+  it('FINALIZE from Speaking mid-clarification ends session in Done', () => {
+    const speaking = stateWith('Speaking', {
+      context: { ...initialState.context, lastResponse: { ...utterance, awaiting_clarification: true } },
+    });
+    expect(reducer(speaking, { type: 'FINALIZE' }).tag).toBe('Done');
+  });
+
+  it('new initialState after a finalized session is clean', () => {
+    let session = initialState;
+    session = reducer(session, { type: 'WAKE_DETECTED' });
+    session = reducer(session, { type: 'SILENCE_DETECTED' });
+    session = reducer(session, { type: 'BACKEND_RESPONDED', response: utterance });
+    session = reducer(session, { type: 'PLAYBACK_ENDED' });
+    session = reducer(session, { type: 'FINALIZE' });
+    expect(session.tag).toBe('Done');
+
+    // New session = new machine instance — initialState is always fresh
+    const newSession = initialState;
+    expect(newSession.tag).toBe('Armed');
+    expect(newSession.context.sessionId).toBeNull();
+    expect(newSession.context.currentIngredients).toEqual([]);
+    expect(newSession.context.lastResponse).toBeNull();
   });
 });
 

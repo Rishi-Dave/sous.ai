@@ -1,10 +1,15 @@
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from gemini_client import Intent, ParsedIngredient
+from gemini_client import UtteranceResponse as GeminiUtteranceResponse
 from supabase import Client
 
 from app.deps import get_db, get_gemini_client, get_tts
 from app.schemas.utterance import UtteranceResponse
 from app.tts import ElevenLabsTTS
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -77,6 +82,8 @@ async def process_utterance_endpoint(
         is_resolving = pending_kind == "ingredient" and clarification_name is not None
         logger.info("clarification | is_resolving=%s clarification_name=%s", is_resolving, clarification_name)
 
+        existing_names = {i.name.lower() for i in session_ingredients}
+
         for item in result.items:
             if is_resolving and item.name.lower() == clarification_name.lower():
                 logger.info("clarification | resolving qty for '%s' → qty=%s unit=%s", item.name, item.qty, item.unit)
@@ -86,8 +93,20 @@ async def process_utterance_endpoint(
                     .ilike("name", clarification_name) \
                     .is_("qty", "null") \
                     .execute()
+            elif item.name.lower() in existing_names:
+                existing = next(i for i in session_ingredients if i.name.lower() == item.name.lower())
+                if item.action == "replace" or existing.qty is None or item.qty is None:
+                    new_qty = item.qty
+                else:
+                    new_qty = existing.qty + item.qty
+                logger.info("ingredient update | action=%s name='%s' existing_qty=%s new_qty=%s unit=%s", item.action, item.name, existing.qty, new_qty, item.unit)
+                db.table("ingredients") \
+                    .update({"qty": new_qty, "unit": item.unit, "raw_phrase": item.raw_phrase}) \
+                    .eq("recipe_id", session_id) \
+                    .ilike("name", item.name) \
+                    .execute()
             else:
-                logger.info("clarification | inserting ingredient '%s' qty=%s unit=%s", item.name, item.qty, item.unit)
+                logger.info("ingredient insert | name='%s' qty=%s unit=%s", item.name, item.qty, item.unit)
                 db.table("ingredients").insert({
                     "recipe_id": session_id,
                     "name": item.name,
