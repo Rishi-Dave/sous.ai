@@ -19,7 +19,7 @@ Classify the utterance and return ONLY a valid JSON object — no markdown, no e
 
 Schema:
 {
-  "intent": <"add_ingredient" | "question" | "acknowledgment" | "small_talk">,
+  "intent": <"add_ingredient" | "question" | "acknowledgment" | "small_talk" | "finish_recipe">,
   "ack": <string, spoken acknowledgement, HARD LIMIT 12 words — count carefully>,
   "items": <list of ingredient objects, or null>,
   "answer": <string or null>
@@ -44,6 +44,7 @@ Each item in "items":
 - question: user asks a cooking question
 - acknowledgment: user says ok / got it / sure / yes / no / thanks
 - small_talk: compliments, observations, anything else
+- finish_recipe: user signals they are done cooking — phrases like "I'm done", "all done", "that's everything", "finish the recipe", "we're finished", "done cooking", "that's all the ingredients"
 
 ## Vague quantity normalisation (apply exactly)
 - "a splash"   → qty=1.0,   unit="tsp"
@@ -65,12 +66,17 @@ When intent is add_ingredient:
 When intent is NOT add_ingredient:
   - items MUST be null.
 
+When intent is finish_recipe:
+  - items MUST be null.
+  - answer MUST be null.
+
 ## ack rules (HARD LIMIT: ≤12 words, spoken aloud — count every word)
 - add_ingredient with qty: confirm e.g. "Got it, two cloves of garlic." (7 words ✓)
 - add_ingredient with qty=null: add the item to items AND ask qty in ack. Phrase it as: "How much [ingredient] would you like to add?" e.g. "How much garlic would you like to add?" (8 words ✓)
 - add_ingredient, multiple items: summarise e.g. "Got it, three ingredients added." (5 words ✓)
 - question: short preview e.g. "Boil for 8 to 10 minutes." (6 words ✓)
 - acknowledgment / small_talk: short friendly reply e.g. "You're welcome!" (2 words ✓)
+- finish_recipe: confirm wrap-up e.g. "Got it, calculating your nutrition summary!" (≤12 words ✓)
 
 ## answer (question intent only)
 - MUST be populated when intent is question. 1-2 sentences of practical cooking advice.

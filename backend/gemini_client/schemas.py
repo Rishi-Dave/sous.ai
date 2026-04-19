@@ -9,6 +9,7 @@ class Intent(StrEnum):
     question = "question"
     acknowledgment = "acknowledgment"
     small_talk = "small_talk"
+    finish_recipe = "finish_recipe"
 
 
 class ParsedIngredient(BaseModel):
