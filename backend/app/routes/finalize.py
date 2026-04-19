@@ -19,7 +19,7 @@ async def finalize_session(
     settings: Settings = Depends(get_settings),
 ) -> FinalizeResponse:
     recipe_resp = db.table("recipes").select("recipe_id").eq("recipe_id", req.session_id).maybe_single().execute()
-    if not recipe_resp.data:
+    if not recipe_resp or not recipe_resp.data:
         raise HTTPException(status_code=404, detail="Session not found")
 
     ingredients_resp = db.table("ingredients").select("*").eq("recipe_id", req.session_id).execute()
