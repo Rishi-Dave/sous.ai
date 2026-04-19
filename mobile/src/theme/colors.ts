@@ -10,6 +10,11 @@ export const colors = {
   darkGrey: '#333333',
   borderGrey: '#C2C2C2',
   white: '#FFFFFF',
+  deepGreenTint: 'rgba(26,71,42,0.06)',
+  deepGreenOnCream: 'rgba(26,71,42,0.12)',
+  creamSubdued: 'rgba(255,253,232,0.7)',
+  goldSoft: 'rgba(239,193,87,0.25)',
+  error: '#C62828',
 } as const;
 
 export type ColorToken = keyof typeof colors;
