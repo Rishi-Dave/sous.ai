@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 logging.basicConfig(level=logging.INFO)
-from app.routes import finalize, recipes, sessions, tts, utterance
+from app.routes import finalize, recipes, sessions, tts, utterance, wake_probe
 
 app = FastAPI(title="Sous Chef", version="0.1.0")
 
@@ -20,6 +20,7 @@ app.include_router(utterance.router, tags=["utterance"])
 app.include_router(finalize.router, tags=["finalize"])
 app.include_router(recipes.router, tags=["recipes"])
 app.include_router(tts.router, tags=["tts"])
+app.include_router(wake_probe.router, tags=["wake"])
 
 
 @app.get("/healthz")
