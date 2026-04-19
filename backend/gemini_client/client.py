@@ -149,15 +149,22 @@ def _singularize_units(parsed: dict) -> None:
             item["unit"] = unit.rstrip("s")
 
 
-def _normalize_vague_qty(parsed: dict) -> None:
-    """Apply the canonical vague-qty table to items whose raw_phrase contains a known phrase."""
+def _normalize_vague_qty(parsed: dict) -> bool:
+    """Apply the canonical vague-qty table to items whose raw_phrase contains a known phrase.
+
+    Returns True if any item had its qty resolved from null to a concrete value."""
+    resolved_any = False
     for item in parsed.get("items") or []:
         phrase = (item.get("raw_phrase") or "").lower()
+        was_null = item.get("qty") is None
         for keyword, qty, unit in _VAGUE_QTY_MAP:
             if keyword in phrase:
                 item["qty"] = qty
                 item["unit"] = unit
+                if was_null and qty is not None:
+                    resolved_any = True
                 break
+    return resolved_any
 
 
 async def _transcribe(client: AsyncGroq, audio_bytes: bytes) -> str:
@@ -238,7 +245,13 @@ async def process_utterance(
         end = raw.rindex("}") + 1
         parsed = json.loads(raw[start:end])
         _singularize_units(parsed)
-        _normalize_vague_qty(parsed)
+        resolved_vague = _normalize_vague_qty(parsed)
+        # LLM sometimes writes a clarification question for vague phrases it normalized —
+        # replace the ack with a confirmation so TTS doesn't speak an unanswerable question.
+        if resolved_vague and parsed.get("ack", "").rstrip().endswith("?"):
+            items = parsed.get("items") or []
+            phrase = items[0]["raw_phrase"] if items else "that"
+            parsed["ack"] = f"Got it, adding {phrase}."
         return UtteranceResponse.model_validate(parsed)
 
     raise RuntimeError("Tool-call loop exceeded max iterations")
