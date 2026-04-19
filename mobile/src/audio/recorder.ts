@@ -1,15 +1,56 @@
-// Native stub. The web implementation lives in recorder.web.ts; Metro resolves
-// that on web, this on native. Phone wiring (expo-av Audio.Recording) lands in rh/phone-mic.
-// See docs/design.md §4 and root CLAUDE.md architecture rule 1.
+// Native (iOS/Android) implementation. Metro picks recorder.web.ts on web.
+// Root CLAUDE.md rule 1: one audio consumer at a time — flip setAudioModeAsync
+// between recording and playback so TTS doesn't fight the mic.
+// expo-av is lazy-required inside each function so Jest's jsdom env never tries
+// to load ExponentAV (which has no JS fallback).
+
+import type { RecordedAudio } from './types';
+
+let current: any = null;
 
 export async function startRecording(): Promise<void> {
-  return;
+  if (current) throw new Error('already recording');
+  const { Audio } = require('expo-av');
+  const perm = await Audio.requestPermissionsAsync();
+  if (!perm.granted) throw new Error('mic permission denied');
+
+  await Audio.setAudioModeAsync({
+    allowsRecordingIOS: true,
+    playsInSilentModeIOS: true,
+  });
+  const { recording } = await Audio.Recording.createAsync(
+    Audio.RecordingOptionsPresets.HIGH_QUALITY,
+  );
+  current = recording;
 }
 
-export async function stopRecording(): Promise<Blob> {
-  return new Blob([], { type: 'audio/wav' });
+export async function stopRecording(): Promise<RecordedAudio> {
+  if (!current) throw new Error('not recording');
+  const { Audio } = require('expo-av');
+  const rec = current;
+  current = null;
+  await rec.stopAndUnloadAsync();
+  const uri = rec.getURI();
+  if (!uri) throw new Error('recording produced no URI');
+  await Audio.setAudioModeAsync({
+    allowsRecordingIOS: false,
+    playsInSilentModeIOS: true,
+  });
+  return { uri, mime: 'audio/m4a' };
 }
 
 export async function cancelRecording(): Promise<void> {
-  return;
+  if (!current) return;
+  const { Audio } = require('expo-av');
+  const rec = current;
+  current = null;
+  try {
+    await rec.stopAndUnloadAsync();
+  } catch {
+    // already stopped — harmless
+  }
+  await Audio.setAudioModeAsync({
+    allowsRecordingIOS: false,
+    playsInSilentModeIOS: true,
+  });
 }

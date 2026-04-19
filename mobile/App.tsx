@@ -4,10 +4,13 @@ import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'rea
 import { createSession, IS_MOCK, sendUtterance } from './src/api/client';
 import { cancelRecording, startRecording, stopRecording } from './src/audio/recorder';
 import { playAck, stopAck } from './src/audio/tts';
+import type { RecordedAudio } from './src/audio/types';
 import { initialState, reducer } from './src/state/machine';
 import type { Action, MachineState } from './src/state/machine';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+// Seeded demo user from supabase/seed.sql — must be a real UUID so the FK to profiles holds.
+const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
 // Design doc §4 rule 1: after TTS playback ends, wait before re-arming Porcupine.
 const PLAYBACK_REARM_MS = 300;
 
@@ -44,10 +47,10 @@ export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
-  const recordedBlobRef = useRef<Blob | null>(null);
+  const recordedAudioRef = useRef<RecordedAudio | null>(null);
 
   useEffect(() => {
-    createSession('demo-user')
+    createSession(DEMO_USER_ID)
       .then((res) => setSessionId(res.session_id))
       .catch((e) => setError(String(e)));
   }, []);
@@ -75,9 +78,9 @@ export default function App() {
 
   useEffect(() => {
     if (state.tag !== 'Processing' || !sessionId) return;
-    const blob = recordedBlobRef.current ?? new Blob([], { type: 'audio/wav' });
-    recordedBlobRef.current = null;
-    sendUtterance(sessionId, blob)
+    const audio = recordedAudioRef.current ?? new Blob([], { type: 'audio/wav' });
+    recordedAudioRef.current = null;
+    sendUtterance(sessionId, audio)
       .then((response) => dispatch({ type: 'BACKEND_RESPONDED', response }))
       .catch((e) => {
         setError(String(e));
@@ -121,7 +124,7 @@ export default function App() {
     if (state.tag === 'Listening') {
       setIsBusy(true);
       try {
-        recordedBlobRef.current = await stopRecording();
+        recordedAudioRef.current = await stopRecording();
         dispatch({ type: 'SILENCE_DETECTED' });
       } catch (e) {
         setError(`stopRecording failed: ${String(e)}`);
