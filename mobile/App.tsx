@@ -2,8 +2,12 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { createSession, IS_MOCK, sendUtterance } from './src/api/client';
+import { playDing } from './src/audio/ding';
+import { armPorcupine, disarmPorcupine } from './src/audio/porcupine';
 import { cancelRecording, startRecording, stopRecording } from './src/audio/recorder';
 import { playAck, stopAck } from './src/audio/tts';
+import type { MeterReading } from './src/audio/vad';
+import { shouldStop } from './src/audio/vad';
 import type { RecordedAudio } from './src/audio/types';
 import { initialState, reducer } from './src/state/machine';
 import type { Action, MachineState } from './src/state/machine';
@@ -13,6 +17,8 @@ const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'http://localhost:800
 const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
 // Design doc §4 rule 1: after TTS playback ends, wait before re-arming Porcupine.
 const PLAYBACK_REARM_MS = 300;
+// Hard cap on a single listening window — defense against a missed VAD trigger.
+const MAX_LISTEN_MS = 10_000;
 
 const TAG_COLORS: Record<MachineState['tag'], string> = {
   Armed: '#1e88e5',
@@ -55,23 +61,84 @@ export default function App() {
       .catch((e) => setError(String(e)));
   }, []);
 
+  // Arm Porcupine whenever the session is live and we're back in Armed.
+  // Cleanup on transition out of Armed (and on unmount) releases the mic so
+  // expo-av can take it — root CLAUDE.md rule 1: only one audio consumer.
+  useEffect(() => {
+    if (state.tag !== 'Armed' || !sessionId) return;
+    let cancelled = false;
+    armPorcupine(() => {
+      if (cancelled) return;
+      dispatch({ type: 'WAKE_DETECTED' });
+    }).catch((e: unknown) => {
+      // Porcupine init failure should not wedge — manual Wake button still works.
+      setError(`armPorcupine failed: ${String(e)}`);
+    });
+    return () => {
+      cancelled = true;
+      disarmPorcupine().catch(() => {});
+    };
+  }, [state.tag, sessionId]);
+
   useEffect(() => {
     if (state.tag !== 'Listening') return;
     setError(null);
-    startRecording().catch((e: unknown) => {
-      const name = e instanceof Error ? e.name : '';
-      if (name === 'NotAllowedError') {
-        setError('Mic permission denied. Grant access and tap Wake again.');
-      } else if (name === 'NotFoundError') {
-        setError('No microphone found on this device.');
-      } else {
-        setError(`startRecording failed: ${String(e)}`);
+    let cancelled = false;
+    let hardCapTimer: ReturnType<typeof setTimeout> | null = null;
+    let stopping = false;
+    const readings: MeterReading[] = [];
+
+    const autoStop = async () => {
+      if (cancelled || stopping) return;
+      stopping = true;
+      if (hardCapTimer) clearTimeout(hardCapTimer);
+      try {
+        recordedAudioRef.current = await stopRecording();
+        if (!cancelled) dispatch({ type: 'SILENCE_DETECTED' });
+      } catch (e) {
+        setError(`stopRecording failed: ${String(e)}`);
+        if (!cancelled) dispatch({ type: 'MANUAL_STOP' });
       }
-      dispatch({ type: 'MANUAL_STOP' });
-    });
+    };
+
+    (async () => {
+      // Disarm here too in case the Armed cleanup hasn't yet released the mic.
+      // Ordering: Porcupine off → ding → mic on (single audio consumer rule).
+      await disarmPorcupine().catch(() => {});
+      await playDing();
+      if (cancelled) return;
+      try {
+        await startRecording({
+          onMeter: (db, t) => {
+            if (cancelled || stopping) return;
+            readings.push({ db, t });
+            if (shouldStop(readings)) autoStop();
+          },
+        });
+      } catch (e: unknown) {
+        if (cancelled) return;
+        const name = e instanceof Error ? e.name : '';
+        if (name === 'NotAllowedError') {
+          setError('Mic permission denied. Grant access and tap Wake again.');
+        } else if (name === 'NotFoundError') {
+          setError('No microphone found on this device.');
+        } else {
+          setError(`startRecording failed: ${String(e)}`);
+        }
+        dispatch({ type: 'MANUAL_STOP' });
+        return;
+      }
+      if (cancelled) {
+        await cancelRecording().catch(() => {});
+        return;
+      }
+      hardCapTimer = setTimeout(autoStop, MAX_LISTEN_MS);
+    })();
+
     return () => {
-      // Fires when state leaves Listening. If we transitioned via SILENCE_DETECTED
-      // the button handler already stopped the recorder; this is a no-op then.
+      cancelled = true;
+      if (hardCapTimer) clearTimeout(hardCapTimer);
+      // If autoStop already ran, the recorder is already stopped — cancelRecording is a no-op.
       cancelRecording().catch(() => {});
     };
   }, [state.tag]);
@@ -124,7 +191,14 @@ export default function App() {
     if (state.tag === 'Listening') {
       setIsBusy(true);
       try {
-        recordedAudioRef.current = await stopRecording();
+        try {
+          recordedAudioRef.current = await stopRecording();
+        } catch (e) {
+          // VAD or 10s hard-cap may have already stopped the recorder. That path
+          // dispatches SILENCE_DETECTED itself, so the manual tap should be a no-op.
+          if (e instanceof Error && /not recording/i.test(e.message)) return;
+          throw e;
+        }
         dispatch({ type: 'SILENCE_DETECTED' });
       } catch (e) {
         setError(`stopRecording failed: ${String(e)}`);

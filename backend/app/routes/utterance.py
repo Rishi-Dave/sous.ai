@@ -138,9 +138,6 @@ async def process_utterance_endpoint(
     current_resp = db.table("ingredients").select("*").eq("recipe_id", session_id).execute()
     current_ingredients = [_db_row_to_ingredient(r) for r in (current_resp.data or [])]
 
-    current_resp = db.table("ingredients").select("*").eq("recipe_id", session_id).execute()
-    current_ingredients = [_db_row_to_ingredient(r) for r in (current_resp.data or [])]
-
     # Design §8: for a question intent the `answer` is the spoken reply;
     # otherwise the `ack` is what the user hears. Fallback to a filler so we never
     # send an empty string to ElevenLabs (which 400s).
