@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from gemini_client import ParsedIngredient
@@ -44,14 +45,18 @@ async def finalize_session(
         "per_ingredient": macros.per_ingredient,
     }).execute()
 
-    db.table("recipes").update({
+    recipe_update: dict[str, Any] = {
         "status": "finalized",
         "recipe_name": req.recipe_name,
         "finalized_at": datetime.now(timezone.utc).isoformat(),
-    }).eq("recipe_id", req.session_id).execute()
+    }
+    if req.cook_time_seconds is not None:
+        recipe_update["cook_time_seconds"] = req.cook_time_seconds
+    db.table("recipes").update(recipe_update).eq("recipe_id", req.session_id).execute()
 
     return FinalizeResponse(
         recipe_id=req.session_id,
         macros=macros,
         ingredients=ingredients,
+        cook_time_seconds=req.cook_time_seconds,
     )

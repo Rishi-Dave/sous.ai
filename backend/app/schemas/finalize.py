@@ -16,9 +16,11 @@ class MacroLog(BaseModel):
 class FinalizeRequest(BaseModel):
     session_id: str
     recipe_name: str
+    cook_time_seconds: int | None = None
 
 
 class FinalizeResponse(BaseModel):
     recipe_id: str
     macros: MacroLog
     ingredients: list[ParsedIngredient]
+    cook_time_seconds: int | None = None
