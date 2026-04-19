@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import type {
   CreateSessionRequest,
   CreateSessionResponse,
@@ -9,7 +8,7 @@ import type {
 import { mockCreateSession, mockFinalize, mockSendUtterance } from './mock';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
-const MOCK = Platform.OS === 'web' || process.env.EXPO_PUBLIC_MOCK === '1';
+const MOCK = process.env.EXPO_PUBLIC_MOCK === '1';
 
 export async function createSession(userId: string): Promise<CreateSessionResponse> {
   const body: CreateSessionRequest = { user_id: userId };
@@ -29,10 +28,9 @@ export async function sendUtterance(sessionId: string, audio: Blob): Promise<Utt
 
   const form = new FormData();
   form.append('session_id', sessionId);
-  // TODO(rh/mic-vad): replace with RN FormData file shape `{ uri, name, type }` when the
-  // real recorder lands. This cast is unreachable on web (MOCK gate) but will produce an
-  // invalid multipart body on the dev client.
-  form.append('audio', audio as unknown as string);
+  // TODO(rh/phone-mic): RN FormData wants `{ uri, name, type }` not a Blob. This path
+  // works on web (MediaRecorder hands us a real Blob); phone wiring replaces it.
+  form.append('audio', audio, 'audio.wav');
   const res = await fetch(`${BACKEND_URL}/utterance`, { method: 'POST', body: form });
   if (!res.ok) throw new Error(`sendUtterance failed: ${res.status}`);
   return res.json();
