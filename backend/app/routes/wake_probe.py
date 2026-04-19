@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Case-insensitive substring match after lowercasing transcript.
-_WAKE_MARKERS = ("hey sous", "hey chef", "hey sou")
+_WAKE_MARKERS = ("hey sous", "hey chef", "hey sou", "hey sue")
 
 
 def _is_wake_transcript(text: str) -> bool:

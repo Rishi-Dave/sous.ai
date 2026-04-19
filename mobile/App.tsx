@@ -46,7 +46,7 @@ function advanceLabelFor(tag: MachineState['tag'], handsFreeWake: boolean): stri
   switch (tag) {
     case 'Armed':
       return handsFreeWake
-        ? 'Wake (“Hey Sous” or tap)'
+        ? 'Wake (“Hey Sous” / “Hey Sue” or tap)'
         : 'Start recording (tap)';
     case 'Listening': return 'Stop recording';
     case 'Processing': return '…waiting for backend';
@@ -61,6 +61,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const recordedAudioRef = useRef<RecordedAudio | null>(null);
+  /** Bumped on Groq-probe effect cleanup so in-flight loops exit (avoids mic use after wake / Strict Mode double mount). */
+  const groqWakeProbeNonce = useRef(0);
   const porcupineOn = usePicovoicePorcupine();
   const groqWakeOn = useGroqWakeProbe() && Platform.OS !== 'web';
   const handsFreeWake = porcupineOn || groqWakeOn;
@@ -91,16 +93,19 @@ export default function App() {
   // Optional Groq wake: short expo-av clips in Armed, POST /wake_probe (no Porcupine).
   useEffect(() => {
     if (!groqWakeOn || state.tag !== 'Armed' || !sessionId || IS_MOCK) return;
+    const myNonce = ++groqWakeProbeNonce.current;
     let cancelled = false;
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    const stale = () => cancelled || groqWakeProbeNonce.current !== myNonce;
 
     (async () => {
-      while (!cancelled) {
+      while (!stale()) {
         await disarmPorcupine().catch(() => {});
+        if (stale()) break;
         try {
           await startRecording();
         } catch (e: unknown) {
-          if (!cancelled) {
+          if (!stale()) {
             const name = e instanceof Error ? e.name : '';
             if (name === 'NotAllowedError') {
               setError('Mic permission denied. Enable the mic for hands-free wake, or tap Wake.');
@@ -111,7 +116,7 @@ export default function App() {
           return;
         }
         await sleep(GRO_WAKE_CHUNK_MS);
-        if (cancelled) {
+        if (stale()) {
           await cancelRecording().catch(() => {});
           return;
         }
@@ -120,24 +125,34 @@ export default function App() {
           clip = await stopRecording();
         } catch {
           await cancelRecording().catch(() => {});
-          await sleep(GRO_WAKE_GAP_MS);
+          if (!stale()) await sleep(GRO_WAKE_GAP_MS);
           continue;
+        }
+        if (stale()) {
+          await cancelRecording().catch(() => {});
+          return;
         }
         try {
           const { wake } = await sendWakeProbe(clip);
-          if (wake && !cancelled) {
+          if (stale()) {
+            await cancelRecording().catch(() => {});
+            return;
+          }
+          if (wake) {
             dispatch({ type: 'WAKE_DETECTED' });
             return;
           }
         } catch {
           // Backend or network blip — keep probing.
         }
+        if (stale()) break;
         await sleep(GRO_WAKE_GAP_MS);
       }
     })();
 
     return () => {
       cancelled = true;
+      groqWakeProbeNonce.current += 1;
       cancelRecording().catch(() => {});
     };
   }, [groqWakeOn, state.tag, sessionId]);
@@ -283,7 +298,7 @@ export default function App() {
           <Text style={styles.hint}>
             {porcupineOn && 'Wake: on-device Porcupine — say your wake phrase or tap the button.'}
             {!porcupineOn && groqWakeOn && !IS_MOCK && (
-              'Wake: server checks short clips for “Hey Sous” / “Hey Chef” — or tap the button.'
+              'Wake: server checks short clips for “Hey Sous”, “Hey Sue”, or “Hey Chef” — or tap the button.'
             )}
             {!porcupineOn && (!groqWakeOn || IS_MOCK) && (
               'Wake: tap the button below to start recording (on-demand; no always-on mic).'
