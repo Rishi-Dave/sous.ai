@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from gemini_client import ParsedIngredient
 from supabase import Client
 
@@ -6,6 +6,23 @@ from app.deps import get_db
 from app.schemas.finalize import FinalizeResponse, MacroLog
 
 router = APIRouter()
+
+
+@router.delete("/recipes/{recipe_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_recipe(recipe_id: str, db: Client = Depends(get_db)) -> Response:
+    existing = (
+        db.table("recipes")
+        .select("recipe_id")
+        .eq("recipe_id", recipe_id)
+        .maybe_single()
+        .execute()
+    )
+    if not existing or not existing.data:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    # Cascade deletes on ingredients + macro_logs are declared in the initial
+    # schema migration, so deleting the recipe row cleans up its children.
+    db.table("recipes").delete().eq("recipe_id", recipe_id).execute()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/recipes/{recipe_id}", response_model=FinalizeResponse)

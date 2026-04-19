@@ -80,4 +80,13 @@ export async function getRecipe(recipeId: string): Promise<FinalizeResponse> {
   return res.json();
 }
 
+export async function deleteRecipe(recipeId: string): Promise<void> {
+  if (MOCK) return;
+
+  const res = await fetch(`${BACKEND_URL}/recipes/${encodeURIComponent(recipeId)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error(`deleteRecipe failed: ${res.status}`);
+}
+
 export const IS_MOCK = MOCK;
