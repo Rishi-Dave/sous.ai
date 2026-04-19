@@ -16,6 +16,7 @@ import { IngredientRow } from '../../src/components/IngredientRow';
 import { SectionHeading } from '../../src/components/SectionHeading';
 import { RuleOff } from '../../src/components/RuleOff';
 import { useCooking } from '../../src/state/CookingContext';
+import { formatDuration } from '../../src/util/formatDuration';
 import { colors } from '../../src/theme/colors';
 import { typography } from '../../src/theme/typography';
 import { radii, scale } from '../../src/theme/spacing';
@@ -70,6 +71,11 @@ export default function SummaryScreen() {
         <View style={styles.ringBlock}>
           <Text style={styles.eyebrowTotal}>Total calories</Text>
           <CalorieRing calories={macros.calories} />
+          {formatDuration(finalizeResponse.cook_time_seconds) ? (
+            <Text style={styles.cookTime}>
+              Time on the stove · {formatDuration(finalizeResponse.cook_time_seconds)}
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.macroBlock}>
@@ -138,6 +144,7 @@ const styles = StyleSheet.create({
   dateline: { ...typography.byline, color: colors.mutedGreen },
   ringBlock: { alignItems: 'center', gap: scale.md },
   eyebrowTotal: { ...typography.eyebrow, color: colors.mutedGreen },
+  cookTime: { ...typography.caption, color: colors.mutedGreen },
   macroBlock: { gap: scale.md },
   list: { paddingHorizontal: 0 },
   empty: { padding: scale.xl },

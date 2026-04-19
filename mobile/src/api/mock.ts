@@ -1,5 +1,6 @@
 import mockUtterances from '../mocks/utterances.json';
 import type {
+  CookbookResponse,
   CreateSessionRequest,
   CreateSessionResponse,
   FinalizeRequest,
@@ -24,7 +25,7 @@ export async function mockSendUtterance(_sessionId: string, _audio: Blob): Promi
   return next;
 }
 
-export async function mockFinalize(_req: FinalizeRequest): Promise<FinalizeResponse> {
+export async function mockFinalize(req: FinalizeRequest): Promise<FinalizeResponse> {
   // Realistic macro shape matching the backend/app/routes/finalize.py response
   // post PR #14. per_ingredient keys are the ingredient names; values match the
   // PerIngredientMacro type in api/types.ts.
@@ -45,6 +46,35 @@ export async function mockFinalize(_req: FinalizeRequest): Promise<FinalizeRespo
       { name: 'olive oil', qty: 1, unit: 'tsp', raw_phrase: 'a splash of olive oil' },
       { name: 'garlic', qty: 3, unit: 'cloves', raw_phrase: 'three cloves of garlic' },
       { name: 'pasta', qty: 200, unit: 'g', raw_phrase: '200 grams of pasta' },
+    ],
+    cook_time_seconds: req.cook_time_seconds ?? null,
+  };
+}
+
+export async function mockListRecipes(_userId: string): Promise<CookbookResponse> {
+  return {
+    entries: [
+      {
+        recipe_id: '00000000-0000-4000-8000-00000000aaa1',
+        recipe_name: 'Pasta aglio e olio',
+        finalized_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+        cook_time_seconds: 420,
+        calories: 520,
+      },
+      {
+        recipe_id: '00000000-0000-4000-8000-00000000aaa2',
+        recipe_name: 'Chicken stir-fry',
+        finalized_at: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(),
+        cook_time_seconds: 1200,
+        calories: 680,
+      },
+      {
+        recipe_id: '00000000-0000-4000-8000-00000000aaa3',
+        recipe_name: 'Lentil soup',
+        finalized_at: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
+        cook_time_seconds: 2700,
+        calories: 340,
+      },
     ],
   };
 }

@@ -92,6 +92,14 @@ export default function Home() {
             <Text style={styles.ctaText}>Begin a session</Text>
           )}
         </Pressable>
+        <Pressable
+          onPress={() => router.push('/(cooking)/cookbook')}
+          accessibilityLabel="Open your cookbook"
+          style={({ pressed }) => [styles.cookbookLink, pressed && styles.cookbookLinkPressed]}
+          hitSlop={8}
+        >
+          <Text style={styles.cookbookLinkText}>Open your cookbook →</Text>
+        </Pressable>
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
     </SafeAreaView>
@@ -189,6 +197,13 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: colors.cream,
+  },
+  cookbookLink: { alignSelf: 'center', paddingVertical: scale.xs },
+  cookbookLinkPressed: { opacity: 0.6 },
+  cookbookLinkText: {
+    ...typography.eyebrow,
+    color: colors.deepGreen,
+    textDecorationLine: 'underline',
   },
   error: { color: colors.error, textAlign: 'center', marginTop: scale.md },
 });

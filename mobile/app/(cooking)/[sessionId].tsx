@@ -77,6 +77,10 @@ export default function CookingScreen() {
   } = useCooking();
   const isFocused = useIsFocused();
   const recordedAudioRef = useRef<RecordedAudio | null>(null);
+  // Cook-time starts counting when the cooking screen mounts and is sent with
+  // the finalize() call. Ref, not state — we don't need to re-render on tick.
+  const sessionStartRef = useRef<number>(Date.now());
+  const elapsedSeconds = () => Math.max(0, Math.floor((Date.now() - sessionStartRef.current) / 1000));
 
   // Armed effect: arm Porcupine; dispatch WAKE_DETECTED on detection.
   useEffect(() => {
@@ -232,9 +236,10 @@ export default function CookingScreen() {
     if (!sid) return;
     setFinalizeStarted(true);
     const recipeName = deriveRecipeName(rid, state.context.currentIngredients);
+    const cookTime = elapsedSeconds();
     (async () => {
       try {
-        const res = await finalize(sid, recipeName);
+        const res = await finalize(sid, recipeName, cookTime);
         setFinalizeResponse(res);
         router.push('/(cooking)/summary');
       } catch (e) {
@@ -260,8 +265,9 @@ export default function CookingScreen() {
     if (finalizeStarted || !sid) return;
     setFinalizeStarted(true);
     const recipeName = deriveRecipeName(rid, state.context.currentIngredients);
+    const cookTime = elapsedSeconds();
     try {
-      const res = await finalize(sid, recipeName);
+      const res = await finalize(sid, recipeName, cookTime);
       setFinalizeResponse(res);
       router.push('/(cooking)/summary');
     } catch (e) {

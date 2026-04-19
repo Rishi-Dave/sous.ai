@@ -42,6 +42,7 @@ export interface CreateSessionResponse {
 export interface FinalizeRequest {
   session_id: string;
   recipe_name: string;
+  cook_time_seconds?: number | null;
 }
 
 export interface PerIngredientMacro {
@@ -67,4 +68,18 @@ export interface FinalizeResponse {
   recipe_id: string;
   macros: MacroLog;
   ingredients: ParsedIngredient[];
+  cook_time_seconds?: number | null;
+}
+
+// GET /users/{user_id}/recipes — backend/app/schemas/cookbook.py.
+export interface CookbookEntry {
+  recipe_id: string;
+  recipe_name?: string | null;
+  finalized_at?: string | null;
+  cook_time_seconds?: number | null;
+  calories: number;
+}
+
+export interface CookbookResponse {
+  entries: CookbookEntry[];
 }
