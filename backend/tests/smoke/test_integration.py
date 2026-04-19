@@ -1,9 +1,11 @@
 from uuid import UUID
 
+from tests.conftest import DEMO_USER_ID
+
 
 def test_sessions_utterance_finalize_flow(client, silence_wav):
     # /sessions
-    r = client.post("/sessions", json={"user_id": "test-user"})
+    r = client.post("/sessions", json={"user_id": DEMO_USER_ID})
     assert r.status_code == 200, r.text
     session = r.json()
     UUID(session["session_id"])

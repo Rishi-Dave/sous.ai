@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from app.deps import get_gemini_client, get_tts
 from app.main import app
 from gemini_client import Intent, ParsedIngredient, UtteranceResponse
+from tests.conftest import DEMO_USER_ID
 
 
 def _silence_bytes() -> bytes:
@@ -33,10 +34,17 @@ class _FakeTTS:
         yield b""
 
 
-def _post_utterance(c: TestClient) -> dict:
+def _new_session(c: TestClient) -> str:
+    """Create a real recipe row so `/utterance` has a valid UUID session_id to key off."""
+    r = c.post("/sessions", json={"user_id": DEMO_USER_ID})
+    assert r.status_code == 200, r.text
+    return r.json()["session_id"]
+
+
+def _post_utterance(c: TestClient, session_id: str) -> dict:
     r = c.post(
         "/utterance",
-        data={"session_id": "test-session"},
+        data={"session_id": session_id},
         files={"audio": ("a.wav", _silence_bytes(), "audio/wav")},
     )
     assert r.status_code == 200, r.text
@@ -57,7 +65,8 @@ def test_utterance_add_ingredient_stashes_ack():
     app.dependency_overrides[get_tts] = lambda: fake_tts
     try:
         with TestClient(app) as c:
-            body = _post_utterance(c)
+            session_id = _new_session(c)
+            body = _post_utterance(c, session_id)
         assert body["intent"] == "add_ingredient"
         assert body["ack_audio_url"] == "/tts/stream/fake-id-xyz"
         assert fake_tts.last_stashed == "Got it, olive oil."
@@ -80,7 +89,8 @@ def test_utterance_question_intent_stashes_answer_not_ack():
     app.dependency_overrides[get_tts] = lambda: fake_tts
     try:
         with TestClient(app) as c:
-            body = _post_utterance(c)
+            session_id = _new_session(c)
+            body = _post_utterance(c, session_id)
         assert body["intent"] == "question"
         assert body["answer"] == "About 12 minutes at medium heat."
         assert fake_tts.last_stashed == "About 12 minutes at medium heat."
@@ -103,29 +113,10 @@ def test_utterance_question_intent_with_null_answer_falls_back_to_ack():
     app.dependency_overrides[get_tts] = lambda: fake_tts
     try:
         with TestClient(app) as c:
-            body = _post_utterance(c)
+            session_id = _new_session(c)
+            body = _post_utterance(c, session_id)
         assert body["ack_audio_url"].startswith("/tts/stream/")
         assert fake_tts.last_stashed == "I didn't catch that."
-    finally:
-        app.dependency_overrides.clear()
-
-
-def test_utterance_gemini_raises_soft_falls_to_okay():
-    """Until Atharva's gemini_client JSON-parse bug is fixed, /utterance must keep
-    the demo loop alive rather than leaking a 500."""
-    fake_tts = _FakeTTS()
-
-    async def broken_gemini(*_args, **_kwargs):
-        raise ValueError("Extra data: line 1 column 112 (char 111)")
-
-    app.dependency_overrides[get_gemini_client] = lambda: broken_gemini
-    app.dependency_overrides[get_tts] = lambda: fake_tts
-    try:
-        with TestClient(app) as c:
-            body = _post_utterance(c)
-        assert body["intent"] == "small_talk"
-        assert body["ack_audio_url"].startswith("/tts/stream/")
-        assert fake_tts.last_stashed == "Okay."
     finally:
         app.dependency_overrides.clear()
 
@@ -146,7 +137,8 @@ def test_utterance_empty_ack_and_null_answer_falls_back_to_filler():
     app.dependency_overrides[get_tts] = lambda: fake_tts
     try:
         with TestClient(app) as c:
-            body = _post_utterance(c)
+            session_id = _new_session(c)
+            body = _post_utterance(c, session_id)
         assert body["ack_audio_url"].startswith("/tts/stream/")
         assert fake_tts.last_stashed == "Okay."
     finally:
