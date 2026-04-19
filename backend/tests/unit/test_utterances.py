@@ -17,6 +17,8 @@ import asyncio
 import pytest
 from gemini_client import Intent, ParsedIngredient, UtteranceResponse, process_utterance
 
+pytestmark = pytest.mark.llm
+
 
 @pytest.fixture(autouse=True)
 async def rate_limit_buffer():

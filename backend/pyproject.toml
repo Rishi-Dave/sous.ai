@@ -21,6 +21,11 @@ dependencies = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+timeout = 30
+addopts = "-m 'not llm'"
+markers = [
+    "llm: calls real Groq API — slow and requires GROQ_API_KEY",
+]
 
 [dependency-groups]
 dev = [

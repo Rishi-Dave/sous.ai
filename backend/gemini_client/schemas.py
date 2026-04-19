@@ -1,4 +1,5 @@
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +16,7 @@ class ParsedIngredient(BaseModel):
     qty: float | None = None
     unit: str | None = None
     raw_phrase: str
+    action: Literal["add", "replace"] = "add"
 
 
 class UtteranceResponse(BaseModel):

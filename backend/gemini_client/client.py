@@ -30,8 +30,14 @@ Each item in "items":
   "name": <string>,
   "qty": <float or null>,
   "unit": <string, ALWAYS singular — "clove" not "cloves", "cup" not "cups", "gram" not "grams", "slice" not "slices", "tsp" not "tsps", "tbsp" not "tbsps">,
-  "raw_phrase": <exact words user said for this ingredient>
+  "raw_phrase": <exact words user said for this ingredient>,
+  "action": <"add" | "replace">
 }
+
+## action rules
+- "action": "add"     — default. Use when the user is adding a new ingredient OR adding MORE of an existing one ("add more garlic", "another splash of olive oil", "also add 2 cloves").
+- "action": "replace" — use when the user explicitly wants to change or correct the total amount of an ingredient already listed ("change garlic to 4 cloves", "actually use 3 tbsp olive oil", "make it 100 grams pasta", "update the salt to 1 tsp").
+- When "Ingredients added so far" is empty, always use "add".
 
 ## Intent rules
 - add_ingredient: user is adding an ingredient to their recipe
@@ -111,6 +117,43 @@ def _build_context(
     return "\n".join(lines)
 
 
+_PLURAL_UNITS = {
+    "cloves", "cups", "grams", "slices", "tsps", "tbsps",
+    "ounces", "pounds", "liters", "milliliters", "pieces", "heads",
+    "stalks", "leaves", "sprigs", "pinches", "dashes", "handfuls",
+}
+
+# Keyed on substrings of raw_phrase (lowercase). Applied after LLM response so
+# tests are deterministic even when the model ignores the prompt table.
+_VAGUE_QTY_MAP: list[tuple[str, float | None, str | None]] = [
+    ("splash",  1.0,   "tsp"),
+    ("pinch",   0.125, "tsp"),
+    ("dash",    0.5,   "tsp"),
+    ("drizzle", 1.0,   "tbsp"),
+    ("handful", 0.5,   "cup"),
+    ("to taste", None, None),
+]
+
+
+def _singularize_units(parsed: dict) -> None:
+    """Strip plural 's' from unit fields the LLM returns despite the singular instruction."""
+    for item in parsed.get("items") or []:
+        unit = (item.get("unit") or "").strip().lower()
+        if unit in _PLURAL_UNITS:
+            item["unit"] = unit.rstrip("s")
+
+
+def _normalize_vague_qty(parsed: dict) -> None:
+    """Apply the canonical vague-qty table to items whose raw_phrase contains a known phrase."""
+    for item in parsed.get("items") or []:
+        phrase = (item.get("raw_phrase") or "").lower()
+        for keyword, qty, unit in _VAGUE_QTY_MAP:
+            if keyword in phrase:
+                item["qty"] = qty
+                item["unit"] = unit
+                break
+
+
 async def _transcribe(client: AsyncGroq, audio_bytes: bytes) -> str:
     transcription = await client.audio.transcriptions.create(
         file=("audio.wav", audio_bytes, "audio/wav"),
@@ -187,6 +230,9 @@ async def process_utterance(
         raw = choice.message.content
         start = raw.index("{")
         end = raw.rindex("}") + 1
-        return UtteranceResponse.model_validate(json.loads(raw[start:end]))
+        parsed = json.loads(raw[start:end])
+        _singularize_units(parsed)
+        _normalize_vague_qty(parsed)
+        return UtteranceResponse.model_validate(parsed)
 
     raise RuntimeError("Tool-call loop exceeded max iterations")

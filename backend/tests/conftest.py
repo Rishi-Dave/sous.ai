@@ -18,8 +18,7 @@ DEMO_USER_ID = "00000000-0000-0000-0000-000000000001"
 
 def _point_settings_at_local_supabase() -> None:
     """Force the backend's Settings() to read local Supabase creds, not the remote
-    ones in the repo .env. Runs at conftest import time so it's in place before any
-    test triggers `Settings()` via the dep tree."""
+    ones in the repo .env. Called lazily so fake-DB unit tests don't require Docker."""
     try:
         out = subprocess.check_output(
             ["supabase", "status", "-o", "env"],
@@ -30,8 +29,7 @@ def _point_settings_at_local_supabase() -> None:
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
         raise RuntimeError(
             "supabase CLI not running — start it with `supabase start` from the repo root "
-            "before running backend tests. Tests write to Supabase; pointing them at the "
-            "remote prod instance would pollute real data."
+            "before running backend tests that hit the real database."
         ) from exc
     for line in out.splitlines():
         if "=" not in line:
@@ -44,7 +42,11 @@ def _point_settings_at_local_supabase() -> None:
             os.environ["SUPABASE_SERVICE_ROLE_KEY"] = value
 
 
-_point_settings_at_local_supabase()
+@pytest.fixture(scope="session")
+def supabase_env():
+    """Session-scoped fixture — request this in any test that talks to the real DB.
+    Fake-DB unit tests (those that override get_db) should NOT use it."""
+    _point_settings_at_local_supabase()
 
 
 _SILENCE_WAV = Path(__file__).parent / "fixtures" / "1s-silence.wav"
@@ -112,7 +114,8 @@ def fake_tts() -> _FakeTTS:
 
 
 @pytest.fixture
-def client(fake_tts: _FakeTTS):
+def client(fake_tts: _FakeTTS, supabase_env):  # noqa: F811
+    """TestClient wired to real local Supabase. Requires `supabase start`."""
     app.dependency_overrides[get_gemini_client] = lambda: _mock_process_utterance
     app.dependency_overrides[get_tts] = lambda: fake_tts
     with TestClient(app) as c:

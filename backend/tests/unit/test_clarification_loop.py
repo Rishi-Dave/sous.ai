@@ -325,3 +325,247 @@ class TestClarificationLoop:
             assert fake_tts.last_stashed == "I'll use 2 cloves, a typical amount."
         finally:
             self._clear()
+
+
+# ---------------------------------------------------------------------------
+# Ingredient accumulation / replacement
+# ---------------------------------------------------------------------------
+
+_OLIVE_OIL_INITIAL = UtteranceResponse(
+    intent=Intent.add_ingredient,
+    ack="Got it, 2 tablespoons of olive oil.",
+    items=[ParsedIngredient(name="olive oil", qty=2.0, unit="tbsp", raw_phrase="2 tablespoons olive oil")],
+)
+
+_OLIVE_OIL_ADD_MORE = UtteranceResponse(
+    intent=Intent.add_ingredient,
+    ack="Got it, 1 more tablespoon.",
+    items=[ParsedIngredient(name="olive oil", qty=1.0, unit="tbsp", raw_phrase="another tablespoon", action="add")],
+)
+
+_OLIVE_OIL_REPLACE = UtteranceResponse(
+    intent=Intent.add_ingredient,
+    ack="Changed olive oil to 4 tablespoons.",
+    items=[ParsedIngredient(name="olive oil", qty=4.0, unit="tbsp", raw_phrase="change to 4 tablespoons", action="replace")],
+)
+
+_OLIVE_OIL_REPLACE_NEW = UtteranceResponse(
+    intent=Intent.add_ingredient,
+    ack="Got it, olive oil.",
+    items=[ParsedIngredient(name="olive oil", qty=2.0, unit="tbsp", raw_phrase="olive oil", action="replace")],
+)
+
+
+class TestIngredientUpdate:
+    """Existing ingredient mentioned again — accumulate or replace based on action field."""
+
+    def _overrides(self, fake_tts, mock_gemini, fake_db):
+        app.dependency_overrides[get_gemini_client] = lambda: mock_gemini
+        app.dependency_overrides[get_tts] = lambda: fake_tts
+        app.dependency_overrides[get_db] = lambda: fake_db
+
+    def _clear(self):
+        app.dependency_overrides.clear()
+
+    def test_action_add_accumulates_qty(self):
+        """Turn 1: 2 tbsp olive oil. Turn 2: add 1 more tbsp. Expect 3 tbsp total, one row."""
+        fake_tts = _FakeTTS()
+        mock_gemini = _make_sequential_gemini(_OLIVE_OIL_INITIAL, _OLIVE_OIL_ADD_MORE)
+        fake_db = _FakeDB()
+
+        self._overrides(fake_tts, mock_gemini, fake_db)
+        try:
+            with TestClient(app) as c:
+                session_id = _new_session(c)
+                _post(c, session_id)
+                body2 = _post(c, session_id)
+
+            oil_rows = [i for i in body2["current_ingredients"] if i["name"] == "olive oil"]
+            assert len(oil_rows) == 1, "must not duplicate the row"
+            assert oil_rows[0]["qty"] == pytest.approx(3.0)
+            assert oil_rows[0]["unit"] == "tbsp"
+        finally:
+            self._clear()
+
+    def test_action_replace_overwrites_qty(self):
+        """Turn 1: 2 tbsp olive oil. Turn 2: change to 4 tbsp. Expect 4 tbsp total, one row."""
+        fake_tts = _FakeTTS()
+        mock_gemini = _make_sequential_gemini(_OLIVE_OIL_INITIAL, _OLIVE_OIL_REPLACE)
+        fake_db = _FakeDB()
+
+        self._overrides(fake_tts, mock_gemini, fake_db)
+        try:
+            with TestClient(app) as c:
+                session_id = _new_session(c)
+                _post(c, session_id)
+                body2 = _post(c, session_id)
+
+            oil_rows = [i for i in body2["current_ingredients"] if i["name"] == "olive oil"]
+            assert len(oil_rows) == 1
+            assert oil_rows[0]["qty"] == pytest.approx(4.0)
+        finally:
+            self._clear()
+
+    def test_action_replace_on_new_ingredient_inserts(self):
+        """action='replace' on an ingredient not yet in the session still inserts it (no existing row to overwrite)."""
+        fake_tts = _FakeTTS()
+        mock_gemini = _make_sequential_gemini(_OLIVE_OIL_REPLACE_NEW)
+        fake_db = _FakeDB()
+
+        self._overrides(fake_tts, mock_gemini, fake_db)
+        try:
+            with TestClient(app) as c:
+                session_id = _new_session(c)
+                body = _post(c, session_id)
+
+            oil_rows = [i for i in body["current_ingredients"] if i["name"] == "olive oil"]
+            assert len(oil_rows) == 1
+            assert oil_rows[0]["qty"] == pytest.approx(2.0)
+        finally:
+            self._clear()
+
+    def test_action_add_with_null_existing_qty_uses_new_qty(self):
+        """
+        Garlic row exists with qty=None (clarification pending).
+        A second add with action='add' and a real qty should set qty to the new value,
+        not attempt null arithmetic.
+        """
+        fake_tts = _FakeTTS()
+        garlic_add = UtteranceResponse(
+            intent=Intent.add_ingredient,
+            ack="How much garlic would you like to add?",
+            items=[ParsedIngredient(name="garlic", qty=None, unit=None, raw_phrase="garlic", action="add")],
+        )
+        garlic_more = UtteranceResponse(
+            intent=Intent.add_ingredient,
+            ack="Got it, 2 cloves of garlic.",
+            items=[ParsedIngredient(name="garlic", qty=2.0, unit="clove", raw_phrase="2 cloves", action="add")],
+        )
+        mock_gemini = _make_sequential_gemini(garlic_add, garlic_more)
+        fake_db = _FakeDB()
+
+        self._overrides(fake_tts, mock_gemini, fake_db)
+        try:
+            with TestClient(app) as c:
+                session_id = _new_session(c)
+                _post(c, session_id)   # inserts garlic qty=None, sets pending
+                body2 = _post(c, session_id)
+
+            garlic_rows = [i for i in body2["current_ingredients"] if i["name"] == "garlic"]
+            assert len(garlic_rows) == 1
+            assert garlic_rows[0]["qty"] == pytest.approx(2.0)
+        finally:
+            self._clear()
+
+    def test_multiple_ingredients_one_existing_one_new(self):
+        """
+        User says "add more olive oil and also pasta".
+        olive oil is already in session → accumulate; pasta is new → insert.
+        """
+        fake_tts = _FakeTTS()
+        combined = UtteranceResponse(
+            intent=Intent.add_ingredient,
+            ack="Got it.",
+            items=[
+                ParsedIngredient(name="olive oil", qty=1.0, unit="tbsp", raw_phrase="more olive oil", action="add"),
+                ParsedIngredient(name="pasta", qty=100.0, unit="gram", raw_phrase="pasta"),
+            ],
+        )
+        mock_gemini = _make_sequential_gemini(_OLIVE_OIL_INITIAL, combined)
+        fake_db = _FakeDB()
+
+        self._overrides(fake_tts, mock_gemini, fake_db)
+        try:
+            with TestClient(app) as c:
+                session_id = _new_session(c)
+                _post(c, session_id)
+                body2 = _post(c, session_id)
+
+            by_name = {i["name"]: i for i in body2["current_ingredients"]}
+            assert by_name["olive oil"]["qty"] == pytest.approx(3.0)
+            assert by_name["pasta"]["qty"] == pytest.approx(100.0)
+        finally:
+            self._clear()
+
+
+# ---------------------------------------------------------------------------
+# Session lifecycle — clean start, no bleed between sessions
+# ---------------------------------------------------------------------------
+
+class TestSessionLifecycle:
+    """New sessions start clean; finalized sessions do not bleed state into new ones."""
+
+    def _overrides(self, fake_tts, mock_gemini, fake_db):
+        app.dependency_overrides[get_gemini_client] = lambda: mock_gemini
+        app.dependency_overrides[get_tts] = lambda: fake_tts
+        app.dependency_overrides[get_db] = lambda: fake_db
+
+    def _clear(self):
+        app.dependency_overrides.clear()
+
+    def test_first_utterance_of_new_session_has_no_pending_clarification(self):
+        """The LLM must receive pending_clarification=None on the very first utterance of a session."""
+        fake_tts = _FakeTTS()
+        mock_gemini = _make_sequential_gemini(
+            UtteranceResponse(intent=Intent.small_talk, ack="Hello!", items=None, answer=None)
+        )
+        fake_db = _FakeDB()
+
+        self._overrides(fake_tts, mock_gemini, fake_db)
+        try:
+            with TestClient(app) as c:
+                session_id = _new_session(c)
+                _post(c, session_id)
+
+            assert mock_gemini.captured[0]["pending_clarification"] is None
+        finally:
+            self._clear()
+
+    def test_sessions_are_isolated_no_ingredient_bleed(self):
+        """Ingredients from session A must not appear in session B."""
+        fake_tts = _FakeTTS()
+        mock_gemini = _make_sequential_gemini(
+            _OLIVE_OIL_INITIAL,
+            UtteranceResponse(intent=Intent.small_talk, ack="Sure!", items=None, answer=None),
+        )
+        fake_db = _FakeDB()
+
+        self._overrides(fake_tts, mock_gemini, fake_db)
+        try:
+            with TestClient(app) as c:
+                session_a = _new_session(c)
+                _post(c, session_a)   # session A now has olive oil
+
+                session_b = _new_session(c)
+                body_b = _post(c, session_b)  # session B — no ingredient
+
+            assert body_b["current_ingredients"] == []
+        finally:
+            self._clear()
+
+    def test_pending_clarification_does_not_bleed_across_sessions(self):
+        """
+        Session A ends mid-clarification (pending_clarification set).
+        Session B starts fresh — LLM must receive pending_clarification=None.
+        """
+        fake_tts = _FakeTTS()
+        mock_gemini = _make_sequential_gemini(
+            _GARLIC_NULL,   # session A turn 1 → sets pending
+            UtteranceResponse(intent=Intent.small_talk, ack="Hi!", items=None, answer=None),  # session B turn 1
+        )
+        fake_db = _FakeDB()
+
+        self._overrides(fake_tts, mock_gemini, fake_db)
+        try:
+            with TestClient(app) as c:
+                session_a = _new_session(c)
+                body_a = _post(c, session_a)
+                assert body_a["awaiting_clarification"] is True
+
+                session_b = _new_session(c)
+                _post(c, session_b)
+
+            # Turn 2 belongs to session B; pending_clarification must be None
+            assert mock_gemini.captured[1]["pending_clarification"] is None
+        finally:
+            self._clear()
