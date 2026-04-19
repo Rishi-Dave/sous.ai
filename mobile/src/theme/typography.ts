@@ -25,4 +25,13 @@ export const typography = {
   caption: { fontSize: 11, fontWeight: '400' } satisfies TextStyle,
   macroValue: { fontSize: 18, fontWeight: '500' } satisfies TextStyle,
   wordmark: { fontSize: 36, fontWeight: '500' } satisfies TextStyle,
+  hero: { fontSize: 64, fontWeight: '500', letterSpacing: -1.2 } satisfies TextStyle,
+  recipeTitle: { fontSize: 28, fontWeight: '500' } satisfies TextStyle,
+  monoDigit: {
+    fontSize: 72,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -1.5,
+  } satisfies TextStyle,
+  byline: { fontSize: 11, fontWeight: '400', letterSpacing: 0.55 } satisfies TextStyle,
 };
