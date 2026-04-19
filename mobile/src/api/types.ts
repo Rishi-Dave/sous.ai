@@ -3,7 +3,12 @@
 // backend/ is a breaking change to the API contract and must land here in the same PR.
 // Run `integration-checker` after any edit to verify symmetry.
 
-export type Intent = 'add_ingredient' | 'question' | 'acknowledgment' | 'small_talk';
+export type Intent =
+  | 'add_ingredient'
+  | 'question'
+  | 'acknowledgment'
+  | 'small_talk'
+  | 'finish_recipe';
 
 export interface ParsedIngredient {
   name: string;
