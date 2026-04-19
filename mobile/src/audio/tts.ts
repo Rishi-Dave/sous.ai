@@ -1,5 +1,7 @@
-// Web-only playback this branch. Native path stays stubbed — phone work replaces it
-// with expo-av Sound.createAsync in a later branch.
+// TTS playback. Web uses HTMLAudioElement; native uses expo-av Audio.Sound.
+// Single-file runtime branch via isWeb() — Jest tests mock each path independently.
+// expo-av is lazy-required inside the native branch so web bundles / jsdom tests
+// never try to load ExponentAV (which has no JS fallback).
 // Caller resolves relative URLs (e.g. "/tts/stream/<id>") against the backend base.
 
 type Disposable = { resolve: () => void; dispose: () => void };
@@ -11,10 +13,19 @@ function isWeb(): boolean {
 }
 
 export function playAck(url: string): Promise<void> {
-  if (!isWeb()) {
-    return new Promise((resolve) => setTimeout(resolve, 500));
-  }
+  if (!isWeb()) return playAckNative(url);
+  return playAckWeb(url);
+}
 
+export function stopAck(): void {
+  const c = currentControl;
+  if (!c) return;
+  currentControl = null;
+  c.dispose();
+  c.resolve();
+}
+
+function playAckWeb(url: string): Promise<void> {
   // Preempt any prior playback so the state machine never doubles up.
   stopAck();
 
@@ -60,10 +71,58 @@ export function playAck(url: string): Promise<void> {
   });
 }
 
-export function stopAck(): void {
-  const c = currentControl;
-  if (!c) return;
-  currentControl = null;
-  c.dispose();
-  c.resolve();
+function playAckNative(url: string): Promise<void> {
+  stopAck();
+
+  return new Promise<void>((resolve, reject) => {
+    // Lazy-require so the web/jsdom Jest environment never tries to load ExponentAV.
+    const { Audio } = require('expo-av');
+
+    let sound: any = null;
+    let settled = false;
+
+    const dispose = () => {
+      if (!sound) return;
+      const s = sound;
+      sound = null;
+      s.unloadAsync().catch(() => {});
+    };
+    const control: Disposable = { resolve, dispose };
+    currentControl = control;
+
+    const onStatus = (status: any) => {
+      if (settled) return;
+      if (!status.isLoaded) {
+        if (status.error) {
+          settled = true;
+          if (currentControl === control) currentControl = null;
+          dispose();
+          reject(new Error(String(status.error)));
+        }
+        return;
+      }
+      if (status.didJustFinish) {
+        settled = true;
+        if (currentControl === control) currentControl = null;
+        dispose();
+        resolve();
+      }
+    };
+
+    Audio.Sound.createAsync({ uri: url }, { shouldPlay: true }, onStatus)
+      .then(({ sound: s }: { sound: any }) => {
+        if (settled) {
+          // stopAck() fired before the sound loaded — release it.
+          s.unloadAsync().catch(() => {});
+          return;
+        }
+        sound = s;
+      })
+      .catch((e: unknown) => {
+        if (settled) return;
+        settled = true;
+        if (currentControl === control) currentControl = null;
+        reject(e instanceof Error ? e : new Error(String(e)));
+      });
+  });
 }

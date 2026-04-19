@@ -2,15 +2,9 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from gemini_client import Intent, ParsedIngredient
 from supabase import Client
 
-from app.deps import get_db, get_gemini_client,get_tts
-import logging
-
-from gemini_client import UtteranceResponse as GeminiUtteranceResponse
-
+from app.deps import get_db, get_gemini_client, get_tts
 from app.schemas.utterance import UtteranceResponse
 from app.tts import ElevenLabsTTS
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -64,21 +58,6 @@ async def process_utterance_endpoint(
 
     current_resp = db.table("ingredients").select("*").eq("recipe_id", session_id).execute()
     current_ingredients = [_db_row_to_ingredient(r) for r in (current_resp.data or [])]
-
-    # TODO(ad/gemini-fix): gemini_client currently crashes on some Groq outputs
-    # (json.JSONDecodeError 'Extra data'). Catch + soft-fall so the demo loop stays
-    # alive end-to-end. Drop once docs/notes/2026-04-18-gemini-client-json-extra-data.md
-    # is resolved.
-    try:
-        result = await gemini(audio_bytes, [], None)
-    except Exception as e:
-        logger.warning("gemini_soft_fall: %s: %s", type(e).__name__, e)
-        result = GeminiUtteranceResponse(
-            intent=Intent.small_talk,
-            ack="Okay.",
-            items=None,
-            answer=None,
-        )
 
     # Design §8: for a question intent the `answer` is the spoken reply;
     # otherwise the `ack` is what the user hears. Fallback to a filler so we never
