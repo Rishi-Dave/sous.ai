@@ -2,6 +2,7 @@
   "expo": {
     "name": "Sous Chef",
     "slug": "sous-chef",
+    "scheme": "souschef",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -58,6 +59,9 @@
     },
     "updates": {
       "url": "https://u.expo.dev/d8277307-1dfa-44e4-a82b-283e49ad9d60"
+    },
+    "experiments": {
+      "typedRoutes": true
     }
   }
 }
