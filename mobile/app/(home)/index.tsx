@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { createSession } from '../../src/api/client';
 import { colors } from '../../src/theme/colors';
 import { typography } from '../../src/theme/typography';
@@ -26,6 +26,13 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const today = useMemo(() => formatEditorialDate(new Date()), []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setBusy(false);
+      setError(null);
+    }, []),
+  );
 
   const onStart = async () => {
     if (busy) return;
@@ -138,7 +145,7 @@ function BusyDots() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.cream, paddingHorizontal: scale.xxl },
+  root: { flex: 1, backgroundColor: colors.cream, paddingHorizontal: scale.xxxl },
   top: {
     flexDirection: 'row',
     justifyContent: 'space-between',

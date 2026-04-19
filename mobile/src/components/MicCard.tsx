@@ -179,8 +179,10 @@ function ListeningBody({
 }) {
   return (
     <>
-      <View style={styles.micWrap}>
-        <MicRings active={active} />
+      <View style={styles.micStack}>
+        <View style={styles.ringsLayer} pointerEvents="none">
+          <MicRings active={active} />
+        </View>
         <Pressable onPress={onTap} accessibilityLabel="Stop listening" hitSlop={8}>
           <View style={styles.micGoldFilled}>
             <Mic size={28} color={colors.deepGreen} />
@@ -333,6 +335,19 @@ const styles = StyleSheet.create({
   bodyActive: {},
   bodyInactive: {},
   micWrap: {
+    width: 72,
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micStack: {
+    width: 72,
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringsLayer: {
+    position: 'absolute',
     width: 72,
     height: 72,
     alignItems: 'center',

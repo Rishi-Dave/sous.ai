@@ -126,9 +126,9 @@ export default function SummaryScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cream },
-  headerWrap: { paddingHorizontal: scale.xl, paddingTop: scale.sm },
+  headerWrap: { paddingHorizontal: scale.xxl, paddingTop: scale.sm },
   body: {
-    paddingHorizontal: scale.xl,
+    paddingHorizontal: scale.xxl,
     paddingTop: scale.xl,
     paddingBottom: 160,
     gap: scale.xxl,
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footer: {
-    paddingHorizontal: scale.xl,
+    paddingHorizontal: scale.xxl,
     paddingVertical: scale.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.deepGreenOnCream,

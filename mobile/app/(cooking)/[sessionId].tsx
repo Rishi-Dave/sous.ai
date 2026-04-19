@@ -385,8 +385,8 @@ function SessionTimer() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cream },
-  headerWrap: { paddingHorizontal: scale.xl, paddingTop: scale.sm },
-  body: { paddingHorizontal: scale.xl, paddingTop: scale.xl, paddingBottom: scale.xxxl, gap: scale.xl },
+  headerWrap: { paddingHorizontal: scale.xxl, paddingTop: scale.sm },
+  body: { paddingHorizontal: scale.xxl, paddingTop: scale.xl, paddingBottom: scale.xxxl, gap: scale.xl },
   empty: {
     ...typography.body,
     color: colors.mutedGreen,
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   footer: {
-    paddingHorizontal: scale.xl,
+    paddingHorizontal: scale.xxl,
     paddingVertical: scale.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.deepGreenOnCream,
