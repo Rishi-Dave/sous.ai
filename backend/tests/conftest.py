@@ -1,3 +1,5 @@
+import os
+import subprocess
 import wave
 from pathlib import Path
 
@@ -7,6 +9,43 @@ from fastapi.testclient import TestClient
 from app.deps import get_gemini_client, get_tts
 from app.main import app
 from gemini_client import Intent, ParsedIngredient, UtteranceResponse
+
+
+# Seeded demo user UUID from supabase/seed.sql — exists in the local Supabase instance
+# so POST /sessions with this user_id succeeds without violating the FK to public.profiles.
+DEMO_USER_ID = "00000000-0000-0000-0000-000000000001"
+
+
+def _point_settings_at_local_supabase() -> None:
+    """Force the backend's Settings() to read local Supabase creds, not the remote
+    ones in the repo .env. Runs at conftest import time so it's in place before any
+    test triggers `Settings()` via the dep tree."""
+    try:
+        out = subprocess.check_output(
+            ["supabase", "status", "-o", "env"],
+            text=True,
+            cwd=Path(__file__).resolve().parents[2],
+            stderr=subprocess.DEVNULL,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        raise RuntimeError(
+            "supabase CLI not running — start it with `supabase start` from the repo root "
+            "before running backend tests. Tests write to Supabase; pointing them at the "
+            "remote prod instance would pollute real data."
+        ) from exc
+    for line in out.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        value = value.strip().strip('"')
+        if key == "API_URL":
+            os.environ["SUPABASE_URL"] = value
+        elif key == "SERVICE_ROLE_KEY":
+            os.environ["SUPABASE_SERVICE_ROLE_KEY"] = value
+
+
+_point_settings_at_local_supabase()
+
 
 _SILENCE_WAV = Path(__file__).parent / "fixtures" / "1s-silence.wav"
 
