@@ -44,12 +44,23 @@ export interface FinalizeRequest {
   recipe_name: string;
 }
 
+export interface PerIngredientMacro {
+  calories: number;
+  protein_g: number;
+  fat_g: number;
+  carbs_g: number;
+  // True when the backend fell back to LLM estimation because Edamam didn't
+  // resolve the ingredient. Ingredients with no resolution at all are dropped
+  // entirely — they don't appear in this dict.
+  estimated?: boolean;
+}
+
 export interface MacroLog {
   calories: number;
   protein_g: number;
   fat_g: number;
   carbs_g: number;
-  per_ingredient: Record<string, unknown>;
+  per_ingredient: Record<string, PerIngredientMacro>;
 }
 
 export interface FinalizeResponse {

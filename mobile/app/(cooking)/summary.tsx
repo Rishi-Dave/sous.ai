@@ -17,8 +17,6 @@ import { colors } from '../../src/theme/colors';
 import { typography } from '../../src/theme/typography';
 import { radii } from '../../src/theme/spacing';
 
-type PerIngredient = { calories?: number } & Record<string, unknown>;
-
 export default function SummaryScreen() {
   const router = useRouter();
   const { finalizeResponse } = useCooking();
@@ -37,7 +35,7 @@ export default function SummaryScreen() {
   }
 
   const { macros, ingredients } = finalizeResponse;
-  const perIngredient = macros.per_ingredient as Record<string, PerIngredient>;
+  const perIngredient = macros.per_ingredient;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -55,7 +53,7 @@ export default function SummaryScreen() {
         <View style={styles.list}>
           {ingredients.map((ing, i) => {
             const per = perIngredient?.[ing.name];
-            const cal = typeof per?.calories === 'number' ? per.calories : null;
+            const cal = per ? per.calories : null;
             return (
               <IngredientRow
                 key={`${ing.name}-${i}`}
