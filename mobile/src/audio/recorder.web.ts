@@ -1,14 +1,16 @@
 // Web MediaRecorder implementation. Metro picks this over recorder.ts on web.
 // Root CLAUDE.md rule 1: one audio consumer at a time — release the stream on stop/cancel.
+// `onMeter` from StartRecordingOptions is accepted but ignored — MediaRecorder
+// has no built-in metering and we rely on the manual Stop button on web.
 
-import type { RecordedAudio } from './types';
+import type { RecordedAudio, StartRecordingOptions } from './types';
 
 let mediaRecorder: MediaRecorder | null = null;
 let stream: MediaStream | null = null;
 let chunks: Blob[] = [];
 let stopPromise: Promise<Blob> | null = null;
 
-export async function startRecording(): Promise<void> {
+export async function startRecording(_opts: StartRecordingOptions = {}): Promise<void> {
   if (mediaRecorder) throw new Error('already recording');
   stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   chunks = [];

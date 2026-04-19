@@ -32,7 +32,7 @@ mobile/
 │   ├── api/                Backend client (every endpoint has a mock counterpart)
 │   └── mocks/
 ├── assets/
-│   ├── hey_chef.ppn
+│   ├── hey_sous.ppn
 │   └── ding.mp3
 └── eas.json
 ```

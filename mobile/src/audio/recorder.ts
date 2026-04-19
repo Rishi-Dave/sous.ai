@@ -4,11 +4,13 @@
 // expo-av is lazy-required inside each function so Jest's jsdom env never tries
 // to load ExponentAV (which has no JS fallback).
 
-import type { RecordedAudio } from './types';
+import type { RecordedAudio, StartRecordingOptions } from './types';
+
+const METER_INTERVAL_MS = 100;
 
 let current: any = null;
 
-export async function startRecording(): Promise<void> {
+export async function startRecording(opts: StartRecordingOptions = {}): Promise<void> {
   if (current) throw new Error('already recording');
   const { Audio } = require('expo-av');
   const perm = await Audio.requestPermissionsAsync();
@@ -18,8 +20,21 @@ export async function startRecording(): Promise<void> {
     allowsRecordingIOS: true,
     playsInSilentModeIOS: true,
   });
+  const recordingOptions = {
+    ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+    isMeteringEnabled: true,
+  };
+  const onStatus = opts.onMeter
+    ? (status: any) => {
+        if (status.isRecording && typeof status.metering === 'number') {
+          opts.onMeter!(status.metering, status.durationMillis ?? 0);
+        }
+      }
+    : null;
   const { recording } = await Audio.Recording.createAsync(
-    Audio.RecordingOptionsPresets.HIGH_QUALITY,
+    recordingOptions,
+    onStatus,
+    METER_INTERVAL_MS,
   );
   current = recording;
 }
