@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   Pressable,
   SafeAreaView,
@@ -7,24 +8,37 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { HeaderStrip } from '../../src/components/HeaderStrip';
-import { MacroSummary } from '../../src/components/MacroSummary';
+import { EditorialHeader } from '../../src/components/EditorialHeader';
+import { CalorieRing } from '../../src/components/CalorieRing';
+import { MacroTable } from '../../src/components/MacroTable';
 import { ConfirmationPill } from '../../src/components/ConfirmationPill';
 import { IngredientRow } from '../../src/components/IngredientRow';
+import { SectionHeading } from '../../src/components/SectionHeading';
+import { RuleOff } from '../../src/components/RuleOff';
 import { UndoToast } from '../../src/components/UndoToast';
 import { useCooking } from '../../src/state/CookingContext';
 import { colors } from '../../src/theme/colors';
 import { typography } from '../../src/theme/typography';
-import { radii } from '../../src/theme/spacing';
+import { radii, scale } from '../../src/theme/spacing';
+
+function formatEditorialDate(d: Date): string {
+  const month = d.toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
+  const day = d.getDate().toString().padStart(2, '0');
+  const year = d.getFullYear();
+  return `${month} ${day} · ${year}`;
+}
 
 export default function SummaryScreen() {
   const router = useRouter();
   const { finalizeResponse } = useCooking();
+  const today = useMemo(() => formatEditorialDate(new Date()), []);
 
   if (!finalizeResponse) {
     return (
       <SafeAreaView style={styles.root}>
-        <HeaderStrip eyebrow="Recipe complete" title="Summary" />
+        <View style={styles.headerWrap}>
+          <EditorialHeader eyebrow="Recipe complete · N° 01" />
+        </View>
         <View style={styles.empty}>
           <Text style={styles.emptyText}>
             No macros to show — try finishing a cooking session first.
@@ -36,20 +50,40 @@ export default function SummaryScreen() {
 
   const { macros, ingredients } = finalizeResponse;
   const perIngredient = macros.per_ingredient;
+  const maxIngredientCal = perIngredient
+    ? Object.values(perIngredient).reduce((m, v) => (v.calories > m ? v.calories : m), 0)
+    : 0;
 
   return (
     <SafeAreaView style={styles.root}>
-      <HeaderStrip eyebrow="Recipe complete" title="Your recipe" />
-      <ScrollView contentContainerStyle={styles.body}>
-        <MacroSummary
-          calories={macros.calories}
-          protein_g={macros.protein_g}
-          fat_g={macros.fat_g}
-          carbs_g={macros.carbs_g}
+      <View style={styles.headerWrap}>
+        <EditorialHeader
+          eyebrow="Recipe complete · N° 01"
+          onBack={() => router.back()}
         />
-        <ConfirmationPill label="Saved to your cookbook" />
+      </View>
+      <ScrollView contentContainerStyle={styles.body}>
+        <View style={styles.titleBlock}>
+          <Text style={styles.recipeTitle}>Tonight's recipe</Text>
+          <Text style={styles.dateline}>{today}</Text>
+        </View>
 
-        <Text style={styles.eyebrow}>Ingredients</Text>
+        <View style={styles.ringBlock}>
+          <Text style={styles.eyebrowTotal}>Total calories</Text>
+          <CalorieRing calories={macros.calories} />
+        </View>
+
+        <View style={styles.macroBlock}>
+          <RuleOff color="deepGreenOnCream" />
+          <MacroTable
+            protein_g={macros.protein_g}
+            fat_g={macros.fat_g}
+            carbs_g={macros.carbs_g}
+          />
+          <RuleOff color="deepGreenOnCream" />
+        </View>
+
+        <SectionHeading title="Ingredients" count={ingredients.length} />
         <View style={styles.list}>
           {ingredients.map((ing, i) => {
             const per = perIngredient?.[ing.name];
@@ -63,17 +97,26 @@ export default function SummaryScreen() {
                 }
                 caption={cal != null ? `${Math.round(cal)} cal` : undefined}
                 last={i === ingredients.length - 1}
+                microBar={
+                  cal != null && maxIngredientCal > 0
+                    ? { value: cal, max: maxIngredientCal }
+                    : undefined
+                }
               />
             );
           })}
         </View>
       </ScrollView>
 
+      <View style={styles.pillWrap} pointerEvents="box-none">
+        <ConfirmationPill label="Saved to your cookbook" />
+      </View>
+
       <View style={styles.footer}>
         <Pressable
           onPress={() => router.replace('/(home)')}
           accessibilityLabel="Done"
-          style={styles.cta}
+          style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
         >
           <Text style={styles.ctaText}>Done</Text>
         </Pressable>
@@ -86,23 +129,46 @@ export default function SummaryScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cream },
-  body: { padding: 20, gap: 18, paddingBottom: 96 },
-  empty: { padding: 20 },
-  emptyText: { ...typography.body, color: colors.mutedGreen, textAlign: 'center' },
-  eyebrow: { ...typography.eyebrow, color: colors.mutedGreen },
-  list: {
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.borderGrey,
-    borderRadius: 16,
-    paddingHorizontal: 14,
+  headerWrap: { paddingHorizontal: scale.xl, paddingTop: scale.sm },
+  body: {
+    paddingHorizontal: scale.xl,
+    paddingTop: scale.xl,
+    paddingBottom: 160,
+    gap: scale.xxl,
   },
-  footer: { padding: 20, borderTopWidth: 1, borderTopColor: colors.borderGrey },
+  titleBlock: { gap: 4 },
+  recipeTitle: { ...typography.recipeTitle, color: colors.deepGreen },
+  dateline: { ...typography.byline, color: colors.mutedGreen },
+  ringBlock: { alignItems: 'center', gap: scale.md },
+  eyebrowTotal: { ...typography.eyebrow, color: colors.mutedGreen },
+  macroBlock: { gap: scale.md },
+  list: { paddingHorizontal: 0 },
+  empty: { padding: scale.xl },
+  emptyText: { ...typography.body, color: colors.mutedGreen, textAlign: 'center' },
+  pillWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 96,
+    alignItems: 'center',
+  },
+  footer: {
+    paddingHorizontal: scale.xl,
+    paddingVertical: scale.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.deepGreenOnCream,
+  },
   cta: {
     backgroundColor: colors.vibrantGreen,
     borderRadius: radii.button,
-    paddingVertical: 16,
+    paddingVertical: scale.lg,
     alignItems: 'center',
   },
-  ctaText: { ...typography.button, color: colors.cream },
+  ctaPressed: { opacity: 0.85 },
+  ctaText: {
+    ...typography.button,
+    color: colors.cream,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+  },
 });
