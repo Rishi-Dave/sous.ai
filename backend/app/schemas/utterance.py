@@ -9,3 +9,4 @@ class UtteranceResponse(BaseModel):
     items: list[ParsedIngredient] | None = None
     answer: str | None = None
     current_ingredients: list[ParsedIngredient]
+    awaiting_clarification: bool = False

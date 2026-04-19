@@ -8,6 +8,27 @@ from app.tts import ElevenLabsTTS
 
 router = APIRouter()
 
+_INGREDIENT_PREFIX = "INGREDIENT_CLARIFICATION:"
+
+
+def _encode_ingredient_clarification(name: str, question: str) -> str:
+    return f"{_INGREDIENT_PREFIX}{name}|{question}"
+
+
+def _decode_pending(pending: str | None) -> tuple[str, str | None]:
+    if pending and pending.startswith(_INGREDIENT_PREFIX):
+        body = pending[len(_INGREDIENT_PREFIX):]
+        name, _, _ = body.partition("|")
+        return "ingredient", name
+    return "question", None
+
+
+def _pending_display_text(pending: str) -> str:
+    if pending.startswith(_INGREDIENT_PREFIX):
+        _, _, question = pending.partition("|")
+        return question
+    return pending
+
 
 def _db_row_to_ingredient(row: dict) -> ParsedIngredient:
     return ParsedIngredient(
@@ -29,32 +50,74 @@ async def process_utterance_endpoint(
     recipe_resp = db.table("recipes").select("pending_clarification").eq("recipe_id", session_id).maybe_single().execute()
     if not recipe_resp.data:
         raise HTTPException(status_code=404, detail="Session not found")
+
     pending_clarification: str | None = recipe_resp.data.get("pending_clarification")
+    pending_kind, clarification_name = _decode_pending(pending_clarification)
+    llm_pending = _pending_display_text(pending_clarification) if pending_clarification else None
 
     ingredients_resp = db.table("ingredients").select("*").eq("recipe_id", session_id).execute()
     session_ingredients = [_db_row_to_ingredient(r) for r in (ingredients_resp.data or [])]
 
     audio_bytes = await audio.read()
-    result = await gemini(audio_bytes, session_ingredients, pending_clarification)
+
+    try:
+        result = await gemini(audio_bytes, session_ingredients, llm_pending)
+    except Exception as e:
+        logger.warning("gemini_soft_fall: %s: %s", type(e).__name__, e)
+        result = GeminiUtteranceResponse(
+            intent=Intent.small_talk,
+            ack="Okay.",
+            items=None,
+            answer=None,
+        )
+
+    new_pending: str | None = None
 
     if result.intent == Intent.add_ingredient and result.items:
-        rows = [
-            {
-                "recipe_id": session_id,
-                "name": item.name,
-                "qty": item.qty,
-                "unit": item.unit,
-                "raw_phrase": item.raw_phrase,
-            }
-            for item in result.items
-        ]
-        db.table("ingredients").insert(rows).execute()
-        db.table("recipes").update({"pending_clarification": None}).eq("recipe_id", session_id).execute()
+        is_resolving = pending_kind == "ingredient" and clarification_name is not None
+        logger.info("clarification | is_resolving=%s clarification_name=%s", is_resolving, clarification_name)
+
+        for item in result.items:
+            if is_resolving and item.name.lower() == clarification_name.lower():
+                logger.info("clarification | resolving qty for '%s' → qty=%s unit=%s", item.name, item.qty, item.unit)
+                db.table("ingredients") \
+                    .update({"qty": item.qty, "unit": item.unit, "raw_phrase": item.raw_phrase}) \
+                    .eq("recipe_id", session_id) \
+                    .ilike("name", clarification_name) \
+                    .is_("qty", "null") \
+                    .execute()
+            else:
+                logger.info("clarification | inserting ingredient '%s' qty=%s unit=%s", item.name, item.qty, item.unit)
+                db.table("ingredients").insert({
+                    "recipe_id": session_id,
+                    "name": item.name,
+                    "qty": item.qty,
+                    "unit": item.unit,
+                    "raw_phrase": item.raw_phrase,
+                }).execute()
+
+        incomplete = [i for i in result.items if i.qty is None]
+        if incomplete and not is_resolving:
+            # Chain clarification for first incomplete item; subsequent null items chain naturally
+            new_pending = _encode_ingredient_clarification(incomplete[0].name, result.ack)
+            logger.info("clarification | asking for qty: ingredient='%s' ack='%s'", incomplete[0].name, result.ack)
+        elif incomplete and is_resolving:
+            # LLM failed to resolve — retry clarification for the same ingredient
+            new_pending = _encode_ingredient_clarification(clarification_name, result.ack)
+            logger.warning("clarification | LLM failed to resolve qty for '%s', retrying", clarification_name)
+        else:
+            logger.info("clarification | all items resolved, clearing pending_clarification")
+
+        db.table("recipes").update({"pending_clarification": new_pending}).eq("recipe_id", session_id).execute()
+
     elif result.intent == Intent.question:
         db.table("recipes").update({"pending_clarification": result.answer}).eq("recipe_id", session_id).execute()
     else:
         if pending_clarification:
             db.table("recipes").update({"pending_clarification": None}).eq("recipe_id", session_id).execute()
+
+    current_resp = db.table("ingredients").select("*").eq("recipe_id", session_id).execute()
+    current_ingredients = [_db_row_to_ingredient(r) for r in (current_resp.data or [])]
 
     current_resp = db.table("ingredients").select("*").eq("recipe_id", session_id).execute()
     current_ingredients = [_db_row_to_ingredient(r) for r in (current_resp.data or [])]
@@ -72,4 +135,5 @@ async def process_utterance_endpoint(
         items=result.items,
         answer=result.answer,
         current_ingredients=current_ingredients,
+        awaiting_clarification=new_pending is not None,
     )
