@@ -4,7 +4,9 @@
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue) ![Expo SDK 54](https://img.shields.io/badge/expo-SDK%2054-000020) ![Status](https://img.shields.io/badge/hackathon-submission-EFC157)
 
-<!-- TODO: add hero.gif at docs/assets/hero.gif (800×450 recommended — MicCard in Listening state with the three gold rings is the money shot) -->
+<p align="center">
+  <img src="docs/sous-chef-icon-1024.png" alt="Sous Chef icon" width="220" />
+</p>
 
 ---
 
@@ -20,8 +22,7 @@ Nothing here is mocked for the demo. The `/utterance` path actually ships audio 
 
 ## Demo
 
-<!-- TODO: paste demo video URL (YouTube/Loom/Vimeo) -->
-**Demo video:** *coming — 3-minute pasta aglio e olio walk-through.*
+**Demo video:** [▶ pasta aglio e olio walk-through (YouTube Short)](https://youtube.com/shorts/0mSC3VxNl-k?feature=share)
 
 For judges who want to replay the demo without scrubbing video, here's the exact script:
 
