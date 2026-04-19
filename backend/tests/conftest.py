@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app.deps import get_gemini_client
+from app.deps import get_gemini_client, get_tts
 from app.main import app
 from gemini_client import Intent, ParsedIngredient, UtteranceResponse
 
@@ -46,9 +46,36 @@ async def _mock_process_utterance(
     )
 
 
+class _FakeTTS:
+    """Default test double — stash_text records the spoken text; no real network."""
+
+    def __init__(self) -> None:
+        self.last_stashed: str | None = None
+
+    def stash_text(self, text: str) -> str:
+        self.last_stashed = text
+        return "test-audio-id"
+
+    def pop_text(self, audio_id: str) -> str | None:
+        if audio_id != "test-audio-id":
+            return None
+        text = self.last_stashed
+        self.last_stashed = None
+        return text
+
+    def synthesize_stream(self, text: str):
+        yield b"\x00"
+
+
 @pytest.fixture
-def client():
+def fake_tts() -> _FakeTTS:
+    return _FakeTTS()
+
+
+@pytest.fixture
+def client(fake_tts: _FakeTTS):
     app.dependency_overrides[get_gemini_client] = lambda: _mock_process_utterance
+    app.dependency_overrides[get_tts] = lambda: fake_tts
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
