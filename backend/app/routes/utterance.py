@@ -1,10 +1,15 @@
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from gemini_client import Intent, ParsedIngredient
+from gemini_client import UtteranceResponse as GeminiUtteranceResponse
 from supabase import Client
 
 from app.deps import get_db, get_gemini_client, get_tts
 from app.schemas.utterance import UtteranceResponse
 from app.tts import ElevenLabsTTS
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -115,9 +120,6 @@ async def process_utterance_endpoint(
     else:
         if pending_clarification:
             db.table("recipes").update({"pending_clarification": None}).eq("recipe_id", session_id).execute()
-
-    current_resp = db.table("ingredients").select("*").eq("recipe_id", session_id).execute()
-    current_ingredients = [_db_row_to_ingredient(r) for r in (current_resp.data or [])]
 
     current_resp = db.table("ingredients").select("*").eq("recipe_id", session_id).execute()
     current_ingredients = [_db_row_to_ingredient(r) for r in (current_resp.data or [])]
