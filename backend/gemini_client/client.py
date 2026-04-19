@@ -15,6 +15,8 @@ load_dotenv(find_dotenv())
 
 _SYSTEM_PROMPT = """You are a voice-controlled cooking assistant. The user is cooking hands-free and speaks to you.
 
+If the transcript begins with a wake greeting (e.g. "Hey Sous", "Hey Chef", "Hey Sue"), ignore it for intent classification and parse only what the user said after that greeting.
+
 Classify the utterance and return ONLY a valid JSON object — no markdown, no explanation, no extra text before or after.
 
 Schema:

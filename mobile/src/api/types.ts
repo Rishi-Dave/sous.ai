@@ -33,6 +33,11 @@ export interface CreateSessionResponse {
   recipe_id: string;
 }
 
+// POST /wake_probe — backend/app/schemas/wake_probe.py.
+export interface WakeProbeResponse {
+  wake: boolean;
+}
+
 // POST /finalize — backend/app/schemas/finalize.py.
 export interface FinalizeRequest {
   session_id: string;

@@ -4,6 +4,7 @@ import type {
   FinalizeRequest,
   FinalizeResponse,
   UtteranceResponse,
+  WakeProbeResponse,
 } from './types';
 import type { RecordedAudio } from '../audio/types';
 import { isNativeRecording } from '../audio/types';
@@ -22,6 +23,21 @@ export async function createSession(userId: string): Promise<CreateSessionRespon
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`createSession failed: ${res.status}`);
+  return res.json();
+}
+
+export async function sendWakeProbe(audio: RecordedAudio): Promise<WakeProbeResponse> {
+  if (MOCK) return { wake: false };
+
+  const form = new FormData();
+  if (isNativeRecording(audio)) {
+    const part = { uri: audio.uri, name: 'probe.m4a', type: audio.mime } as unknown as Blob;
+    form.append('audio', part, 'probe.m4a');
+  } else {
+    form.append('audio', audio, 'probe.webm');
+  }
+  const res = await fetch(`${BACKEND_URL}/wake_probe`, { method: 'POST', body: form });
+  if (!res.ok) throw new Error(`sendWakeProbe failed: ${res.status}`);
   return res.json();
 }
 

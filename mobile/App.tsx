@@ -1,7 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useReducer, useRef, useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { createSession, IS_MOCK, sendUtterance } from './src/api/client';
+import { Pressable, Platform, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { createSession, IS_MOCK, sendUtterance, sendWakeProbe } from './src/api/client';
+import { useGroqWakeProbe, usePicovoicePorcupine } from './src/config/audioActivation';
 import { playDing } from './src/audio/ding';
 import { armPorcupine, disarmPorcupine } from './src/audio/porcupine';
 import { cancelRecording, startRecording, stopRecording } from './src/audio/recorder';
@@ -19,6 +20,9 @@ const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
 const PLAYBACK_REARM_MS = 300;
 // Hard cap on a single listening window — defense against a missed VAD trigger.
 const MAX_LISTEN_MS = 10_000;
+// Groq hands-free wake: one short clip per iteration (server transcribes via Whisper).
+const GRO_WAKE_CHUNK_MS = 2800;
+const GRO_WAKE_GAP_MS = 450;
 
 const TAG_COLORS: Record<MachineState['tag'], string> = {
   Armed: '#1e88e5',
@@ -38,9 +42,12 @@ function advanceActionFor(state: MachineState): Action | null {
   }
 }
 
-function advanceLabelFor(tag: MachineState['tag']): string {
+function advanceLabelFor(tag: MachineState['tag'], handsFreeWake: boolean): string {
   switch (tag) {
-    case 'Armed': return 'Wake (tap to start recording)';
+    case 'Armed':
+      return handsFreeWake
+        ? 'Wake (“Hey Sous” / “Hey Sue” or tap)'
+        : 'Start recording (tap)';
     case 'Listening': return 'Stop recording';
     case 'Processing': return '…waiting for backend';
     case 'Speaking': return 'Simulate playback end';
@@ -54,6 +61,11 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const recordedAudioRef = useRef<RecordedAudio | null>(null);
+  /** Bumped on Groq-probe effect cleanup so in-flight loops exit (avoids mic use after wake / Strict Mode double mount). */
+  const groqWakeProbeNonce = useRef(0);
+  const porcupineOn = usePicovoicePorcupine();
+  const groqWakeOn = useGroqWakeProbe() && Platform.OS !== 'web';
+  const handsFreeWake = porcupineOn || groqWakeOn;
 
   useEffect(() => {
     createSession(DEMO_USER_ID)
@@ -61,24 +73,89 @@ export default function App() {
       .catch((e) => setError(String(e)));
   }, []);
 
-  // Arm Porcupine whenever the session is live and we're back in Armed.
-  // Cleanup on transition out of Armed (and on unmount) releases the mic so
-  // expo-av can take it — root CLAUDE.md rule 1: only one audio consumer.
+  // Porcupine: opt-in via EXPO_PUBLIC_USE_PORCUPINE + EXPO_PUBLIC_PICOVOICE_ACCESS_KEY.
+  // Cleanup releases the mic so expo-av can record — one audio consumer at a time.
   useEffect(() => {
-    if (state.tag !== 'Armed' || !sessionId) return;
+    if (!porcupineOn || state.tag !== 'Armed' || !sessionId) return;
     let cancelled = false;
     armPorcupine(() => {
       if (cancelled) return;
       dispatch({ type: 'WAKE_DETECTED' });
     }).catch((e: unknown) => {
-      // Porcupine init failure should not wedge — manual Wake button still works.
       setError(`armPorcupine failed: ${String(e)}`);
     });
     return () => {
       cancelled = true;
       disarmPorcupine().catch(() => {});
     };
-  }, [state.tag, sessionId]);
+  }, [porcupineOn, state.tag, sessionId]);
+
+  // Optional Groq wake: short expo-av clips in Armed, POST /wake_probe (no Porcupine).
+  useEffect(() => {
+    if (!groqWakeOn || state.tag !== 'Armed' || !sessionId || IS_MOCK) return;
+    const myNonce = ++groqWakeProbeNonce.current;
+    let cancelled = false;
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    const stale = () => cancelled || groqWakeProbeNonce.current !== myNonce;
+
+    (async () => {
+      while (!stale()) {
+        await disarmPorcupine().catch(() => {});
+        if (stale()) break;
+        try {
+          await startRecording();
+        } catch (e: unknown) {
+          if (!stale()) {
+            const name = e instanceof Error ? e.name : '';
+            if (name === 'NotAllowedError') {
+              setError('Mic permission denied. Enable the mic for hands-free wake, or tap Wake.');
+            } else {
+              setError(`Groq wake could not open mic: ${String(e)}`);
+            }
+          }
+          return;
+        }
+        await sleep(GRO_WAKE_CHUNK_MS);
+        if (stale()) {
+          await cancelRecording().catch(() => {});
+          return;
+        }
+        let clip: RecordedAudio;
+        try {
+          clip = await stopRecording();
+        } catch {
+          await cancelRecording().catch(() => {});
+          if (!stale()) await sleep(GRO_WAKE_GAP_MS);
+          continue;
+        }
+        if (stale()) {
+          await cancelRecording().catch(() => {});
+          return;
+        }
+        try {
+          const { wake } = await sendWakeProbe(clip);
+          if (stale()) {
+            await cancelRecording().catch(() => {});
+            return;
+          }
+          if (wake) {
+            dispatch({ type: 'WAKE_DETECTED' });
+            return;
+          }
+        } catch {
+          // Backend or network blip — keep probing.
+        }
+        if (stale()) break;
+        await sleep(GRO_WAKE_GAP_MS);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      groqWakeProbeNonce.current += 1;
+      cancelRecording().catch(() => {});
+    };
+  }, [groqWakeOn, state.tag, sessionId]);
 
   useEffect(() => {
     if (state.tag !== 'Listening') return;
@@ -217,6 +294,18 @@ export default function App() {
         <Text style={styles.title}>Sous Chef — dev mock</Text>
         <Text style={styles.subtitle}>MOCK: {IS_MOCK ? 'on' : 'off'} · session: {sessionId ?? '…'}</Text>
 
+        {state.tag === 'Armed' && sessionId && (
+          <Text style={styles.hint}>
+            {porcupineOn && 'Wake: on-device Porcupine — say your wake phrase or tap the button.'}
+            {!porcupineOn && groqWakeOn && !IS_MOCK && (
+              'Wake: server checks short clips for “Hey Sous”, “Hey Sue”, or “Hey Chef” — or tap the button.'
+            )}
+            {!porcupineOn && (!groqWakeOn || IS_MOCK) && (
+              'Wake: tap the button below to start recording (on-demand; no always-on mic).'
+            )}
+          </Text>
+        )}
+
         <View style={[styles.stateBadge, { backgroundColor: TAG_COLORS[state.tag] }]}>
           <Text style={styles.stateLabel}>{state.tag}</Text>
         </View>
@@ -227,7 +316,7 @@ export default function App() {
           disabled={!canAdvance}
           style={[styles.advanceBtn, !canAdvance && styles.advanceBtnDisabled]}
         >
-          <Text style={styles.advanceText}>{advanceLabelFor(state.tag)}</Text>
+          <Text style={styles.advanceText}>{advanceLabelFor(state.tag, handsFreeWake)}</Text>
         </Pressable>
 
         <Pressable
@@ -306,6 +395,14 @@ const styles = StyleSheet.create({
   container: { padding: 24, alignItems: 'stretch', gap: 12 },
   title: { fontSize: 24, fontWeight: '700', textAlign: 'center' },
   subtitle: { fontSize: 12, color: '#555', textAlign: 'center', marginBottom: 12 },
+  hint: {
+    fontSize: 13,
+    color: '#424242',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 8,
+    paddingHorizontal: 8,
+  },
   stateBadge: {
     alignSelf: 'center',
     width: 200,
