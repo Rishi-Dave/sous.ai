@@ -15,7 +15,6 @@ import { ConfirmationPill } from '../../src/components/ConfirmationPill';
 import { IngredientRow } from '../../src/components/IngredientRow';
 import { SectionHeading } from '../../src/components/SectionHeading';
 import { RuleOff } from '../../src/components/RuleOff';
-import { UndoToast } from '../../src/components/UndoToast';
 import { useCooking } from '../../src/state/CookingContext';
 import { colors } from '../../src/theme/colors';
 import { typography } from '../../src/theme/typography';
@@ -121,8 +120,6 @@ export default function SummaryScreen() {
           <Text style={styles.ctaText}>Done</Text>
         </Pressable>
       </View>
-
-      <UndoToast label="Saved to cookbook" onUndo={() => router.back()} />
     </SafeAreaView>
   );
 }
