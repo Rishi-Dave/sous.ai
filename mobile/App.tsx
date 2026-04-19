@@ -3,8 +3,13 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { createSession, IS_MOCK, sendUtterance } from './src/api/client';
 import { cancelRecording, startRecording, stopRecording } from './src/audio/recorder';
+import { playAck, stopAck } from './src/audio/tts';
 import { initialState, reducer } from './src/state/machine';
 import type { Action, MachineState } from './src/state/machine';
+
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+// Design doc §4 rule 1: after TTS playback ends, wait before re-arming Porcupine.
+const PLAYBACK_REARM_MS = 300;
 
 const TAG_COLORS: Record<MachineState['tag'], string> = {
   Armed: '#1e88e5',
@@ -79,6 +84,34 @@ export default function App() {
         dispatch({ type: 'MANUAL_STOP' });
       });
   }, [state.tag, sessionId]);
+
+  useEffect(() => {
+    if (state.tag !== 'Speaking') return;
+    const url = state.context.lastResponse?.ack_audio_url;
+    if (!url) {
+      dispatch({ type: 'PLAYBACK_ENDED' });
+      return;
+    }
+    const fullUrl = url.startsWith('/') ? `${BACKEND_URL}${url}` : url;
+    let cancelled = false;
+    let rearmTimer: ReturnType<typeof setTimeout> | null = null;
+
+    playAck(fullUrl)
+      .catch((e: unknown) => {
+        // Swallow and still advance — a playback failure must not wedge the machine.
+        setError(`Playback failed: ${String(e)}`);
+      })
+      .then(() => {
+        if (cancelled) return;
+        rearmTimer = setTimeout(() => dispatch({ type: 'PLAYBACK_ENDED' }), PLAYBACK_REARM_MS);
+      });
+
+    return () => {
+      cancelled = true;
+      if (rearmTimer) clearTimeout(rearmTimer);
+      stopAck();
+    };
+  }, [state.tag, state.context.lastResponse]);
 
   const action = advanceActionFor(state);
   const canAdvance = action !== null && state.tag !== 'Done' && !isBusy;
