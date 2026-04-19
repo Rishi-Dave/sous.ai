@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Pressable,
   SafeAreaView,
@@ -10,10 +10,12 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 
-import { HeaderStrip } from '../../src/components/HeaderStrip';
+import { EditorialHeader } from '../../src/components/EditorialHeader';
 import { MicCard } from '../../src/components/MicCard';
 import type { MicState } from '../../src/components/MicCard';
 import { IngredientRow } from '../../src/components/IngredientRow';
+import { SectionHeading } from '../../src/components/SectionHeading';
+import { EmptyIllustration } from '../../src/components/EmptyIllustration';
 
 import { finalize, sendUtterance } from '../../src/api/client';
 import { playDing } from '../../src/audio/ding';
@@ -29,7 +31,7 @@ import { deriveRecipeName } from '../../src/util/recipeName';
 
 import { colors } from '../../src/theme/colors';
 import { typography } from '../../src/theme/typography';
-import { radii } from '../../src/theme/spacing';
+import { radii, scale } from '../../src/theme/spacing';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 // Design doc §4 rule 1: after TTS playback ends, wait before re-arming Porcupine.
@@ -298,36 +300,51 @@ export default function CookingScreen() {
   const ingredients = state.context.currentIngredients;
   const last = state.context.lastResponse;
   const assistantText = last?.answer ?? last?.items?.[0]?.raw_phrase;
+  const prevLenRef = useRef(ingredients.length);
+  useEffect(() => {
+    prevLenRef.current = ingredients.length;
+  }, [ingredients.length]);
+  const newestIndex = ingredients.length - 1;
 
   return (
     <SafeAreaView style={styles.root}>
-      <HeaderStrip
-        eyebrow="Cooking"
-        title="Live session"
-        subtitle="Say 'hey sous' or tap the mic to add ingredients"
-      />
+      <View style={styles.headerWrap}>
+        <EditorialHeader
+          eyebrow="Live session · N° 01"
+          right={<SessionTimer />}
+          onBack={() => router.back()}
+        />
+      </View>
       <ScrollView contentContainerStyle={styles.body}>
         {ms ? <MicCard state={ms} assistantText={assistantText} onTap={onMicTap} /> : null}
 
-        <Text style={styles.eyebrow}>
-          Ingredients{ingredients.length ? ` (${ingredients.length})` : ''}
-        </Text>
+        <SectionHeading
+          title="Mise en place"
+          count={ingredients.length > 0 ? ingredients.length : undefined}
+        />
         {ingredients.length === 0 ? (
-          <Text style={styles.empty}>
-            No ingredients yet — tap the mic and tell me what you're using.
-          </Text>
+          <View style={styles.emptyWrap}>
+            <EmptyIllustration size={80} />
+            <Text style={styles.empty}>
+              No ingredients yet.{'\n'}Tap the mic and tell me what you're using.
+            </Text>
+          </View>
         ) : (
           <View style={styles.list}>
-            {ingredients.map((ing, i) => (
-              <IngredientRow
-                key={`${ing.name}-${i}`}
-                name={ing.name}
-                quantity={
-                  ing.qty != null ? `${ing.qty}${ing.unit ? ' ' + ing.unit : ''}` : undefined
-                }
-                last={i === ingredients.length - 1}
-              />
-            ))}
+            {ingredients.map((ing, i) => {
+              const isNewest = i === newestIndex && prevLenRef.current < ingredients.length;
+              return (
+                <IngredientRow
+                  key={`${ing.name}-${i}`}
+                  name={ing.name}
+                  quantity={
+                    ing.qty != null ? `${ing.qty}${ing.unit ? ' ' + ing.unit : ''}` : undefined
+                  }
+                  last={i === ingredients.length - 1}
+                  accent={isNewest ? 'gold-asterisk' : undefined}
+                />
+              );
+            })}
           </View>
         )}
 
@@ -338,39 +355,73 @@ export default function CookingScreen() {
         <Pressable
           onPress={onFinish}
           disabled={finalizeStarted || ingredients.length === 0}
-          style={[
+          style={({ pressed }) => [
             styles.cta,
             (finalizeStarted || ingredients.length === 0) && styles.ctaDisabled,
+            pressed && styles.ctaPressed,
           ]}
           accessibilityLabel="Finish cooking"
         >
-          <Text style={styles.ctaText}>{finalizeStarted ? 'Saving…' : 'Finish cooking'}</Text>
+          <Text style={styles.ctaText}>
+            {finalizeStarted ? 'Saving' : 'Finish cooking'}
+          </Text>
         </Pressable>
       </View>
     </SafeAreaView>
   );
 }
 
+function SessionTimer() {
+  const start = useRef(Date.now()).current;
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [start]);
+  const mm = Math.floor(elapsed / 60).toString().padStart(2, '0');
+  const ss = (elapsed % 60).toString().padStart(2, '0');
+  return <Text style={styles.timer}>{`${mm}:${ss}`}</Text>;
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cream },
-  body: { padding: 20, gap: 18 },
-  eyebrow: { ...typography.eyebrow, color: colors.mutedGreen },
-  empty: { ...typography.body, color: colors.mutedGreen, fontStyle: 'italic' },
-  list: {
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.borderGrey,
-    borderRadius: 16,
-    paddingHorizontal: 14,
+  headerWrap: { paddingHorizontal: scale.xl, paddingTop: scale.sm },
+  body: { paddingHorizontal: scale.xl, paddingTop: scale.xl, paddingBottom: scale.xxxl, gap: scale.xl },
+  empty: {
+    ...typography.body,
+    color: colors.mutedGreen,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    lineHeight: 20,
   },
-  footer: { padding: 20, borderTopWidth: 1, borderTopColor: colors.borderGrey },
+  emptyWrap: {
+    alignItems: 'center',
+    gap: scale.md,
+    paddingVertical: scale.xl,
+  },
+  list: {
+    paddingHorizontal: 0,
+  },
+  footer: {
+    paddingHorizontal: scale.xl,
+    paddingVertical: scale.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.deepGreenOnCream,
+  },
   cta: {
     backgroundColor: colors.vibrantGreen,
     borderRadius: radii.button,
-    paddingVertical: 16,
+    paddingVertical: scale.lg,
     alignItems: 'center',
   },
   ctaDisabled: { opacity: 0.5 },
-  ctaText: { ...typography.button, color: colors.cream },
-  error: { color: '#c62828', textAlign: 'center' },
+  ctaPressed: { opacity: 0.85 },
+  ctaText: {
+    ...typography.button,
+    color: colors.cream,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+  },
+  timer: { ...typography.byline, color: colors.mutedGreen, fontVariant: ['tabular-nums'] },
+  error: { color: colors.error, textAlign: 'center' },
 });
