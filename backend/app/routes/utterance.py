@@ -77,6 +77,7 @@ async def process_utterance_endpoint(
         )
 
     new_pending: str | None = None
+    tts_ack = result.ack  # may be overridden below when a clarification question is synthesized
 
     if result.intent == Intent.add_ingredient and result.items:
         is_resolving = pending_kind == "ingredient" and clarification_name is not None
@@ -118,8 +119,13 @@ async def process_utterance_endpoint(
         incomplete = [i for i in result.items if i.qty is None]
         if incomplete and not is_resolving:
             # Chain clarification for first incomplete item; subsequent null items chain naturally
-            new_pending = _encode_ingredient_clarification(incomplete[0].name, result.ack)
-            logger.info("clarification | asking for qty: ingredient='%s' ack='%s'", incomplete[0].name, result.ack)
+            clarification_question = result.ack
+            if not clarification_question.rstrip().endswith("?"):
+                # LLM wrote a confirmation instead of a question — synthesize the proper question
+                clarification_question = f"How much {incomplete[0].name} would you like to add?"
+                tts_ack = clarification_question
+            new_pending = _encode_ingredient_clarification(incomplete[0].name, clarification_question)
+            logger.info("clarification | asking for qty: ingredient='%s' ack='%s'", incomplete[0].name, clarification_question)
         elif incomplete and is_resolving:
             # LLM failed to resolve — retry clarification for the same ingredient
             new_pending = _encode_ingredient_clarification(clarification_name, result.ack)
@@ -141,7 +147,7 @@ async def process_utterance_endpoint(
     # Design §8: for a question intent the `answer` is the spoken reply;
     # otherwise the `ack` is what the user hears. Fallback to a filler so we never
     # send an empty string to ElevenLabs (which 400s).
-    picked = result.answer if result.intent == Intent.question and result.answer else result.ack
+    picked = result.answer if result.intent == Intent.question and result.answer else tts_ack
     tts_text = (picked or "").strip() or "Okay."
     audio_id = tts.stash_text(tts_text)
 
