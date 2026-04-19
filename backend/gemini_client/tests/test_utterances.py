@@ -204,6 +204,68 @@ async def test_acknowledgment_got_it():
     assert result.intent == Intent.acknowledgment
 
 
+@pytest.mark.asyncio
+async def test_acknowledgment_sure():
+    result = await process_utterance(
+        audio_bytes=spoken("sure"),
+        session_ingredients=[],
+        pending_clarification=None,
+    )
+    assert result.intent == Intent.acknowledgment
+    assert result.items is None
+    assert result.answer is None
+    assert len(result.ack.split()) <= 12
+
+
+@pytest.mark.asyncio
+async def test_acknowledgment_yes():
+    result = await process_utterance(
+        audio_bytes=spoken("yes"),
+        session_ingredients=[],
+        pending_clarification=None,
+    )
+    assert result.intent == Intent.acknowledgment
+    assert result.items is None
+    assert result.answer is None
+
+
+@pytest.mark.asyncio
+async def test_acknowledgment_sounds_good():
+    result = await process_utterance(
+        audio_bytes=spoken("sounds good"),
+        session_ingredients=[],
+        pending_clarification=None,
+    )
+    assert result.intent == Intent.acknowledgment
+    assert result.items is None
+    assert len(result.ack.split()) <= 12
+
+
+@pytest.mark.asyncio
+async def test_acknowledgment_yep():
+    result = await process_utterance(
+        audio_bytes=spoken("yep, that's right"),
+        session_ingredients=[],
+        pending_clarification=None,
+    )
+    assert result.intent == Intent.acknowledgment
+    assert result.items is None
+    assert result.answer is None
+    assert len(result.ack.split()) <= 12
+
+
+@pytest.mark.asyncio
+async def test_acknowledgment_no():
+    result = await process_utterance(
+        audio_bytes=spoken("no"),
+        session_ingredients=[],
+        pending_clarification=None,
+    )
+    assert result.intent == Intent.acknowledgment
+    assert result.items is None
+    assert result.answer is None
+
+
 # ---------------------------------------------------------------------------
 # small_talk intent
 # ---------------------------------------------------------------------------

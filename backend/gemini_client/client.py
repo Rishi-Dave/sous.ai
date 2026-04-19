@@ -1,21 +1,27 @@
+import asyncio
 import json
+import logging
 import os
 
 from dotenv import find_dotenv, load_dotenv
-from groq import AsyncGroq
+from groq import AsyncGroq, RateLimitError
 
 from .nutrition_tool import NUTRITION_TOOL, dispatch_tool_call
 from .schemas import ParsedIngredient, UtteranceResponse
+
+log = logging.getLogger(__name__)
 
 load_dotenv(find_dotenv())
 
 _SYSTEM_PROMPT = """You are a voice-controlled cooking assistant. The user is cooking hands-free and speaks to you.
 
-Classify the utterance and return a JSON object matching this exact schema:
+Classify the utterance and return ONLY a valid JSON object — no markdown, no explanation, no extra text before or after.
+
+Schema:
 {
   "intent": <"add_ingredient" | "question" | "acknowledgment" | "small_talk">,
-  "ack": <string, spoken acknowledgement, MAX 12 words>,
-  "items": <list of ingredients or null>,
+  "ack": <string, spoken acknowledgement, HARD LIMIT 12 words — count carefully>,
+  "items": <list of ingredient objects, or null>,
   "answer": <string or null>
 }
 
@@ -23,7 +29,7 @@ Each item in "items":
 {
   "name": <string>,
   "qty": <float or null>,
-  "unit": <string or null>,
+  "unit": <string, ALWAYS singular — "clove" not "cloves", "cup" not "cups", "gram" not "grams", "slice" not "slices", "tsp" not "tsps", "tbsp" not "tbsps">,
   "raw_phrase": <exact words user said for this ingredient>
 }
 
@@ -39,33 +45,32 @@ Each item in "items":
 - "a dash"     → qty=0.5,   unit="tsp"
 - "a drizzle"  → qty=1.0,   unit="tbsp"
 - "a handful"  → qty=0.5,   unit="cup"
-- "to taste"   → qty=null,  unit=null  ← still include the item in items list
-- "some" alone → qty=null,  unit=null  ← still include the item in items list
+- "to taste"   → qty=null,  unit=null
+- "some X"     → qty=null,  unit=null
 
-## Unit format
-Always use singular form. Examples: "clove" not "cloves", "cup" not "cups", "tsp" not "tsps", "tbsp" not "tbsps", "gram" not "grams", "slice" not "slices".
+## ITEMS RULE — ABSOLUTE (no exceptions)
+When intent is add_ingredient:
+  - items MUST be a non-empty list. NEVER null. NEVER empty.
+  - Include EVERY ingredient the user mentioned.
+  - If qty is unknown/vague, still include the item with qty=null.
+  - "add some salt" → items=[{name:"salt", qty:null, unit:null, raw_phrase:"some salt"}]
+  - "add garlic" → items=[{name:"garlic", qty:null, unit:null, raw_phrase:"garlic"}]
 
-## ack rules (always ≤12 words — this is spoken aloud)
-- add_ingredient, single item: confirm concisely e.g. "Got it, two cloves of garlic."
-- add_ingredient, multiple items: summarise e.g. "Got it, three ingredients added." — never list all items.
-- add_ingredient + qty null: ask how much e.g. "How much garlic would you like to add?"
-- question: one-line preview of the answer e.g. "Boil for 8 to 10 minutes."
-- acknowledgment / small_talk: short friendly reply
+When intent is NOT add_ingredient:
+  - items MUST be null.
+
+## ack rules (HARD LIMIT: ≤12 words, spoken aloud — count every word)
+- add_ingredient with qty: confirm e.g. "Got it, two cloves of garlic." (7 words ✓)
+- add_ingredient with qty=null: add the item to items AND ask qty in ack e.g. "How much garlic would you like to add?" (8 words ✓)
+- add_ingredient, multiple items: summarise e.g. "Got it, three ingredients added." (5 words ✓)
+- question: short preview e.g. "Boil for 8 to 10 minutes." (6 words ✓)
+- acknowledgment / small_talk: short friendly reply e.g. "You're welcome!" (2 words ✓)
 
 ## answer (question intent only)
-- MUST be populated whenever intent is question — never leave it null for a question.
-- 1-2 sentences, practical cooking advice.
-- The ack is just a preview; the full answer goes in the answer field.
+- MUST be populated when intent is question. 1-2 sentences of practical cooking advice.
 - null for all other intents.
 
-## items presence rule (critical)
-- MUST be populated whenever intent is add_ingredient — even when qty is null.
-- Every ingredient the user mentioned must appear in items, even with qty=null.
-- Never return items=null when intent is add_ingredient.
-- null for all other intents.
-
-Return only the JSON object. No markdown, no explanation.
-"""
+Output ONLY the JSON object. Zero extra characters outside it."""
 
 _client: AsyncGroq | None = None
 
@@ -122,22 +127,42 @@ async def process_utterance(
         {"role": "user", "content": user_msg},
     ]
 
+    log.info("groq input | messages=%s", json.dumps(messages, ensure_ascii=False))
+
     # Agentic loop: let Groq call get_nutrition if it needs macro data.
     for _ in range(5):
-        response = await client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=messages,
-            tools=[NUTRITION_TOOL],
-            tool_choice="auto",
-            temperature=0.1,
-        )
+        for attempt in range(4):
+            try:
+                response = await client.chat.completions.create(
+                    model="llama-3.1-8b-instant",
+                    messages=messages,
+                    tools=[NUTRITION_TOOL],
+                    tool_choice="auto",
+                    temperature=0.1,
+                )
+                break
+            except RateLimitError:
+                if attempt == 3:
+                    raise
+                await asyncio.sleep(2 ** attempt)
+
         choice = response.choices[0]
 
         if choice.finish_reason == "tool_calls":
             assistant_msg = choice.message.model_dump(exclude_unset=True)
             messages.append(assistant_msg)
             for tc in choice.message.tool_calls:
+                log.info(
+                    "nutrition tool call | fn=%s args=%s",
+                    tc.function.name,
+                    tc.function.arguments,
+                )
                 result = await dispatch_tool_call(tc.function.name, tc.function.arguments)
+                log.info(
+                    "nutrition tool result | fn=%s result=%s",
+                    tc.function.name,
+                    result,
+                )
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
@@ -146,6 +171,8 @@ async def process_utterance(
             continue
 
         raw = choice.message.content
-        return UtteranceResponse.model_validate(json.loads(raw))
+        start = raw.index("{")
+        end = raw.rindex("}") + 1
+        return UtteranceResponse.model_validate(json.loads(raw[start:end]))
 
     raise RuntimeError("Tool-call loop exceeded max iterations")
