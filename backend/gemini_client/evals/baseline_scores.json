@@ -1,0 +1,30 @@
+{
+  "overall": 0.893,
+  "per_intent": {
+    "add_ingredient": 0.874,
+    "question": 1.0,
+    "acknowledgment": 0.789,
+    "small_talk": 0.846,
+    "finish_recipe": 1.0
+  },
+  "per_category": {
+    "add_ingredient_imperative": 0.8,
+    "add_ingredient_vague_qty": 1.0,
+    "add_ingredient_past_tense": 0.75,
+    "add_ingredient_no_qty": 0.8,
+    "add_ingredient_multi": 1.0,
+    "question_substitution": 1.0,
+    "question_technique": 1.0,
+    "question_timing": 1.0,
+    "acknowledgment_multi_word": 0.7,
+    "acknowledgment_single_word": 1.0,
+    "small_talk": 1.0,
+    "finish_recipe": 1.0,
+    "clarification_reply": 1.0,
+    "ambiguous": 0.5
+  },
+  "tolerance": 0.0,
+  "measured_on": "2026-04-22",
+  "model_snapshot": "llama-3.1-8b-instant (Groq)",
+  "notes": "Initial measured baseline from 160-case run, 0:38:56 wall. Low scores in add_ingredient_past_tense (0.75), acknowledgment_multi_word (0.70), and ambiguous (0.50) intentionally lock in current broken/borderline behavior so any improvement is visible as a score lift. Next improvement targets (in priority order): (1) past-tense narration regression documented in docs/notes/2026-04-18-gemini-client-clarification-ack-regression.md — 5 cases drift to acknowledgment instead of add_ingredient; (2) 'I want milk' / 'add olive oil' bare add_ingredient cases returning empty items; (3) acknowledgment_multi_word 'perfect thanks' / 'thanks chef' / 'no worries' drifting to small_talk. One more case (q_sub_heavy_cream) raised a Pydantic ValidationError — the current runner catches exceptions and scores them as failures, so future runs will show 160/160 denominator; this baseline reflects the pre-fix 159 denominator. Update only with PR justification."
+}

@@ -1,0 +1,54 @@
+name: gemini-client eval lint
+
+# Runs on every PR that touches the gemini_client package. Offline-only —
+# no Groq calls. Verifies utterances.yaml schema + baseline_scores.json
+# validity so malformed eval cases don't land.
+#
+# The live-eval job below is intentionally commented out. To enable it:
+#   1. Add GROQ_API_KEY as a repo secret (Settings → Secrets and variables → Actions)
+#   2. Uncomment the `eval-live` job
+#   3. Expect ~10 minutes wall time per PR (150 cases × 1.5s rate-limit + model latency)
+
+on:
+  pull_request:
+    paths:
+      - 'backend/gemini_client/**'
+      - 'backend/pyproject.toml'
+      - 'backend/uv.lock'
+      - '.github/workflows/eval-lint.yml'
+
+jobs:
+  eval-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Sync deps
+        working-directory: backend
+        run: uv sync --frozen
+
+      - name: Lint utterances.yaml + baseline_scores.json
+        working-directory: backend
+        run: uv run python -m gemini_client.evals._lint
+
+# ---------------------------------------------------------------------------
+# eval-live:
+#   # Uncomment once GROQ_API_KEY is configured as a repo secret.
+#   runs-on: ubuntu-latest
+#   needs: eval-lint
+#   steps:
+#     - uses: actions/checkout@v4
+#     - uses: astral-sh/setup-uv@v3
+#     - name: Sync deps
+#       working-directory: backend
+#       run: uv sync --frozen
+#     - name: Run eval harness
+#       working-directory: backend
+#       env:
+#         GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+#       run: uv run pytest gemini_client/evals/ -v --tb=short
