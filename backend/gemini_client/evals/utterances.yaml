@@ -1,0 +1,1213 @@
+# Labeled utterances for the gemini_client eval suite.
+#
+# Schema per row:
+#   id: unique slug (becomes pytest test id)
+#   category: finer bucket than intent, surfaced in the scorecard's per-category table
+#   utterance_text: what the user says (UTF-8, text-passthrough to process_utterance)
+#   expected_intent: add_ingredient | question | acknowledgment | small_talk | finish_recipe
+#   expected_ingredient:       # optional; only for add_ingredient and clarification replies
+#     name: substring match (case-insensitive); pick the core noun, not decorations
+#     qty: float, null, or omit
+#     unit: normalized via rstrip('s'); omit if don't-care
+#   session_ingredients: optional list of {name, qty, unit, raw_phrase?}
+#   pending_clarification: optional str
+#   notes: free-form; cite docs/notes/*.md when the case is a regression target
+#
+# DO NOT synthesize cases via LLM. Harvest from tests + notes + demo walkthrough
+# or hand-write from real cook-along phrasing. When you hit a misclassification
+# in production, add a case here capturing the exact utterance and expected
+# label — that is how the harness pays for itself.
+
+# ==============================================================================
+# add_ingredient — imperative with clear qty+unit (20)
+# Source: test_utterances.py harvest + design doc §7 demo walkthrough + hand-written
+# ==============================================================================
+
+- id: imp_garlic_two_cloves
+  category: add_ingredient_imperative
+  utterance_text: "add two cloves of garlic"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: garlic
+    qty: 2.0
+    unit: clove
+  notes: "harvested from test_utterances.py::test_simple_ingredient_with_qty"
+
+- id: imp_pasta_200g
+  category: add_ingredient_imperative
+  utterance_text: "add 200 grams of pasta"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: pasta
+    qty: 200.0
+    unit: gram
+  notes: "split from test_multiple_ingredients_one_utterance; isolates gram parsing. Unit expected as 'gram' (model's canonical form); rstrip('s') normalizes 'grams'."
+
+- id: imp_olive_oil_two_tbsp
+  category: add_ingredient_imperative
+  utterance_text: "add two tablespoons of olive oil"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: olive oil
+    qty: 2.0
+    unit: tbsp
+  notes: "design doc §7 demo walkthrough base case"
+
+- id: imp_flour_one_cup
+  category: add_ingredient_imperative
+  utterance_text: "add one cup of flour"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: flour
+    qty: 1.0
+    unit: cup
+
+- id: imp_sugar_half_cup
+  category: add_ingredient_imperative
+  utterance_text: "add half a cup of sugar"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: sugar
+    qty: 0.5
+    unit: cup
+
+- id: imp_butter_three_tbsp
+  category: add_ingredient_imperative
+  utterance_text: "add three tablespoons of butter"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: butter
+    qty: 3.0
+    unit: tbsp
+
+- id: imp_chicken_one_pound
+  category: add_ingredient_imperative
+  utterance_text: "add one pound of chicken breast"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: chicken
+    qty: 1.0
+    unit: pound
+
+- id: imp_onion_one_medium
+  category: add_ingredient_imperative
+  utterance_text: "add one medium onion"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: onion
+    qty: 1.0
+
+- id: imp_tomatoes_four
+  category: add_ingredient_imperative
+  utterance_text: "add four roma tomatoes"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: tomato
+    qty: 4.0
+
+- id: imp_eggs_two
+  category: add_ingredient_imperative
+  utterance_text: "add two eggs"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: egg
+    qty: 2.0
+
+- id: imp_milk_half_cup
+  category: add_ingredient_imperative
+  utterance_text: "add half a cup of whole milk"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: milk
+    qty: 0.5
+    unit: cup
+
+- id: imp_parmesan_quarter_cup
+  category: add_ingredient_imperative
+  utterance_text: "add a quarter cup of grated parmesan"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: parmesan
+    qty: 0.25
+    unit: cup
+
+- id: imp_basil_fresh
+  category: add_ingredient_imperative
+  utterance_text: "add ten fresh basil leaves"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: basil
+    qty: 10.0
+
+- id: imp_lemon_one
+  category: add_ingredient_imperative
+  utterance_text: "add the juice of one lemon"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: lemon
+    qty: 1.0
+
+- id: imp_pepper_quarter_tsp
+  category: add_ingredient_imperative
+  utterance_text: "add a quarter teaspoon of black pepper"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: pepper
+    qty: 0.25
+    unit: tsp
+
+- id: imp_chili_flakes_half_tsp
+  category: add_ingredient_imperative
+  utterance_text: "add half a teaspoon of red chili flakes"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: chili
+    qty: 0.5
+    unit: tsp
+
+- id: imp_pasta_454g
+  category: add_ingredient_imperative
+  utterance_text: "add 454 grams of spaghetti"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: spaghetti
+    qty: 454.0
+    unit: gram
+
+- id: imp_soy_sauce_two_tbsp
+  category: add_ingredient_imperative
+  utterance_text: "add two tablespoons of soy sauce"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: soy sauce
+    qty: 2.0
+    unit: tbsp
+
+- id: imp_rice_one_cup
+  category: add_ingredient_imperative
+  utterance_text: "add one cup of jasmine rice"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: rice
+    qty: 1.0
+    unit: cup
+
+- id: imp_water_two_cups
+  category: add_ingredient_imperative
+  utterance_text: "add two cups of water"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: water
+    qty: 2.0
+    unit: cup
+
+# ==============================================================================
+# add_ingredient — vague quantities (18)
+# Source: design doc §8 mapping table × 3 distinct ingredients each
+# Mapping: splash→1tsp, pinch→0.125tsp, dash→0.5tsp, drizzle→1tbsp, handful→0.5cup, to_taste→null
+# ==============================================================================
+
+- id: vague_splash_oil
+  category: add_ingredient_vague_qty
+  utterance_text: "add a splash of olive oil"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: olive oil
+    qty: 1.0
+    unit: tsp
+  notes: "harvested from test_utterances.py::test_vague_qty_splash"
+
+- id: vague_splash_vinegar
+  category: add_ingredient_vague_qty
+  utterance_text: "a splash of balsamic vinegar"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: balsamic
+    qty: 1.0
+    unit: tsp
+
+- id: vague_splash_lemon
+  category: add_ingredient_vague_qty
+  utterance_text: "add a splash of lemon juice"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: lemon
+    qty: 1.0
+    unit: tsp
+
+- id: vague_pinch_pepper_flakes
+  category: add_ingredient_vague_qty
+  utterance_text: "add a pinch of red pepper flakes"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: red pepper flakes
+    qty: 0.125
+    unit: tsp
+  notes: "harvested from test_utterances.py::test_vague_qty_pinch"
+
+- id: vague_pinch_salt
+  category: add_ingredient_vague_qty
+  utterance_text: "add a pinch of salt"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: salt
+    qty: 0.125
+    unit: tsp
+
+- id: vague_pinch_nutmeg
+  category: add_ingredient_vague_qty
+  utterance_text: "add a pinch of nutmeg"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: nutmeg
+    qty: 0.125
+    unit: tsp
+
+- id: vague_dash_hot_sauce
+  category: add_ingredient_vague_qty
+  utterance_text: "add a dash of hot sauce"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: hot sauce
+    qty: 0.5
+    unit: tsp
+
+- id: vague_dash_worcestershire
+  category: add_ingredient_vague_qty
+  utterance_text: "add a dash of worcestershire"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: worcestershire
+    qty: 0.5
+    unit: tsp
+
+- id: vague_dash_cinnamon
+  category: add_ingredient_vague_qty
+  utterance_text: "add a dash of cinnamon"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: cinnamon
+    qty: 0.5
+    unit: tsp
+
+- id: vague_drizzle_honey
+  category: add_ingredient_vague_qty
+  utterance_text: "add a drizzle of honey"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: honey
+    qty: 1.0
+    unit: tbsp
+
+- id: vague_drizzle_oil
+  category: add_ingredient_vague_qty
+  utterance_text: "drizzle some olive oil"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: olive oil
+    qty: 1.0
+    unit: tbsp
+
+- id: vague_drizzle_maple
+  category: add_ingredient_vague_qty
+  utterance_text: "add a drizzle of maple syrup"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: maple syrup
+    qty: 1.0
+    unit: tbsp
+
+- id: vague_handful_pasta
+  category: add_ingredient_vague_qty
+  utterance_text: "add a handful of pasta"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: pasta
+    qty: 0.5
+    unit: cup
+  notes: "harvested from test_utterances.py::test_vague_qty_handful"
+
+- id: vague_handful_spinach
+  category: add_ingredient_vague_qty
+  utterance_text: "throw in a handful of spinach"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: spinach
+    qty: 0.5
+    unit: cup
+
+- id: vague_handful_parsley
+  category: add_ingredient_vague_qty
+  utterance_text: "add a handful of chopped parsley"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: parsley
+    qty: 0.5
+    unit: cup
+
+- id: vague_to_taste_salt
+  category: add_ingredient_vague_qty
+  utterance_text: "add salt to taste"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: salt
+    qty: null
+  notes: "harvested from test_utterances.py::test_vague_qty_to_taste"
+
+- id: vague_to_taste_pepper
+  category: add_ingredient_vague_qty
+  utterance_text: "season with pepper to taste"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: pepper
+    qty: null
+
+- id: vague_to_taste_oil
+  category: add_ingredient_vague_qty
+  utterance_text: "add olive oil to taste"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: olive oil
+    qty: null
+
+# ==============================================================================
+# add_ingredient — past-tense / narration (20) — REGRESSION TARGET
+# Source: issue spec + docs/notes/2026-04-18-gemini-client-clarification-ack-regression.md
+# These currently misclassify as small_talk per the roadmap issue.
+# ==============================================================================
+
+- id: past_added_oil
+  category: add_ingredient_past_tense
+  utterance_text: "added oil to the pan"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: oil
+  notes: "REGRESSION TARGET — issue cites this exact phrase as misclassifying to small_talk"
+
+- id: past_adding_oil
+  category: add_ingredient_past_tense
+  utterance_text: "adding oil to the pan"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: oil
+  notes: "REGRESSION TARGET — present-continuous variant per issue"
+
+- id: past_throwing_in_garlic
+  category: add_ingredient_past_tense
+  utterance_text: "throwing in some garlic"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: garlic
+  notes: "REGRESSION TARGET — issue cites this exact phrase"
+
+- id: past_just_added_olive_oil
+  category: add_ingredient_past_tense
+  utterance_text: "I just added two tablespoons of olive oil"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: olive oil
+    qty: 2.0
+    unit: tbsp
+  notes: "design doc §7 demo walkthrough step 2 — past-tense narration WITH quantity"
+
+- id: past_tossed_in_onion
+  category: add_ingredient_past_tense
+  utterance_text: "tossed in a diced onion"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: onion
+
+- id: past_poured_broth
+  category: add_ingredient_past_tense
+  utterance_text: "poured in a cup of chicken broth"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: broth
+    qty: 1.0
+    unit: cup
+
+- id: past_dropped_in_butter
+  category: add_ingredient_past_tense
+  utterance_text: "dropped in a pat of butter"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: butter
+
+- id: past_sprinkled_salt
+  category: add_ingredient_past_tense
+  utterance_text: "sprinkled some salt on top"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: salt
+
+- id: past_put_in_pasta
+  category: add_ingredient_past_tense
+  utterance_text: "I just put in the pasta"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: pasta
+
+- id: past_chucked_garlic
+  category: add_ingredient_past_tense
+  utterance_text: "chucked three cloves of garlic in the pan"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: garlic
+    qty: 3.0
+
+- id: past_mixing_in_flour
+  category: add_ingredient_past_tense
+  utterance_text: "mixing in half a cup of flour now"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: flour
+    qty: 0.5
+    unit: cup
+
+- id: past_stirred_in_cream
+  category: add_ingredient_past_tense
+  utterance_text: "stirred in some heavy cream"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: cream
+
+- id: past_just_threw_in_shallots
+  category: add_ingredient_past_tense
+  utterance_text: "just threw in two shallots"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: shallot
+    qty: 2.0
+
+- id: past_squeezed_lemon
+  category: add_ingredient_past_tense
+  utterance_text: "squeezed half a lemon over the top"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: lemon
+    qty: 0.5
+
+- id: past_cracked_eggs
+  category: add_ingredient_past_tense
+  utterance_text: "cracked two eggs into the bowl"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: egg
+    qty: 2.0
+
+- id: past_grated_parmesan
+  category: add_ingredient_past_tense
+  utterance_text: "grated a bunch of parmesan in"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: parmesan
+
+- id: past_now_adding_tomato_paste
+  category: add_ingredient_past_tense
+  utterance_text: "now adding a tablespoon of tomato paste"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: tomato paste
+    qty: 1.0
+    unit: tbsp
+
+- id: past_just_tossed_in_mushrooms
+  category: add_ingredient_past_tense
+  utterance_text: "just tossed in some sliced mushrooms"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: mushroom
+
+- id: past_dumped_in_rice
+  category: add_ingredient_past_tense
+  utterance_text: "dumped in a cup of rice"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: rice
+    qty: 1.0
+    unit: cup
+
+- id: past_whisked_in_egg
+  category: add_ingredient_past_tense
+  utterance_text: "whisked in one egg yolk"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: egg
+    qty: 1.0
+
+# ==============================================================================
+# add_ingredient — no quantity (10)
+# Bare or hedged ingredient mentions. Model should add item with qty=null
+# and produce an ack that asks for quantity (per 2026-04-18 regression note).
+# ==============================================================================
+
+- id: noqty_add_salt
+  category: add_ingredient_no_qty
+  utterance_text: "add some salt"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: salt
+  notes: "harvested from test_utterances.py::test_ingredient_no_quantity"
+
+- id: noqty_i_want_milk
+  category: add_ingredient_no_qty
+  utterance_text: "I want milk"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: milk
+  notes: "REGRESSION — 2026-04-18 clarification-ack note; model currently returns confirmation instead of asking qty"
+
+- id: noqty_add_garlic
+  category: add_ingredient_no_qty
+  utterance_text: "add some garlic"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: garlic
+  notes: "harvested from test_utterances.py::test_clarification_vague_triggers_follow_up"
+
+- id: noqty_add_olive_oil
+  category: add_ingredient_no_qty
+  utterance_text: "add olive oil"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: olive oil
+
+- id: noqty_add_flour
+  category: add_ingredient_no_qty
+  utterance_text: "add flour"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: flour
+
+- id: noqty_toss_in_salt
+  category: add_ingredient_no_qty
+  utterance_text: "toss in some salt"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: salt
+  notes: "design doc §7 demo walkthrough step 8 — triggers clarification branch"
+
+- id: noqty_add_parmesan
+  category: add_ingredient_no_qty
+  utterance_text: "add parmesan"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: parmesan
+
+- id: noqty_need_onions
+  category: add_ingredient_no_qty
+  utterance_text: "I need onions in this"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: onion
+
+- id: noqty_add_basil
+  category: add_ingredient_no_qty
+  utterance_text: "add some basil"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: basil
+
+- id: noqty_put_butter
+  category: add_ingredient_no_qty
+  utterance_text: "put butter in the pan"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: butter
+
+# ==============================================================================
+# add_ingredient — multi-ingredient in one utterance (8)
+# ==============================================================================
+
+- id: multi_pasta_and_garlic
+  category: add_ingredient_multi
+  utterance_text: "add 200 grams of pasta and three cloves of garlic"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: pasta
+  notes: "harvested from test_utterances.py::test_multiple_ingredients_one_utterance; checks first item is pasta"
+
+- id: multi_salt_and_pepper
+  category: add_ingredient_multi
+  utterance_text: "add salt and pepper"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: salt
+
+- id: multi_oil_and_garlic
+  category: add_ingredient_multi
+  utterance_text: "add a tablespoon of olive oil and two cloves of garlic"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: olive oil
+
+- id: multi_ack_length_stress
+  category: add_ingredient_multi
+  utterance_text: "add 300 grams of spaghetti and two cloves of garlic and a pinch of salt"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: spaghetti
+  notes: "harvested from test_utterances.py::test_ack_always_within_12_words; stresses multi-item acks"
+
+- id: multi_butter_and_sage
+  category: add_ingredient_multi
+  utterance_text: "add two tablespoons of butter and some fresh sage"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: butter
+
+- id: multi_chicken_and_broth
+  category: add_ingredient_multi
+  utterance_text: "add a pound of chicken thighs and two cups of broth"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: chicken
+
+- id: multi_onion_and_carrot
+  category: add_ingredient_multi
+  utterance_text: "add one diced onion and two grated carrots"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: onion
+
+- id: multi_tomato_and_basil
+  category: add_ingredient_multi
+  utterance_text: "add a can of diced tomatoes and a handful of basil"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: tomato
+
+# ==============================================================================
+# question — substitution (10)
+# ==============================================================================
+
+- id: q_sub_butter_for_oil
+  category: question_substitution
+  utterance_text: "can I use butter instead of olive oil?"
+  expected_intent: question
+  notes: "harvested from test_utterances.py::test_question_substitution"
+
+- id: q_sub_parmesan
+  category: question_substitution
+  utterance_text: "what can I use instead of parmesan?"
+  expected_intent: question
+  notes: "design doc §7 demo walkthrough step 9"
+
+- id: q_sub_vegan_butter
+  category: question_substitution
+  utterance_text: "is there a vegan substitute for butter?"
+  expected_intent: question
+
+- id: q_sub_gluten_free_pasta
+  category: question_substitution
+  utterance_text: "can I use gluten-free pasta instead?"
+  expected_intent: question
+
+- id: q_sub_milk
+  category: question_substitution
+  utterance_text: "can I use oat milk instead of whole milk?"
+  expected_intent: question
+
+- id: q_sub_shallot_onion
+  category: question_substitution
+  utterance_text: "can I swap shallots for onions?"
+  expected_intent: question
+
+- id: q_sub_cilantro_parsley
+  category: question_substitution
+  utterance_text: "what's a good substitute for cilantro?"
+  expected_intent: question
+
+- id: q_sub_wine
+  category: question_substitution
+  utterance_text: "can I skip the white wine or use broth instead?"
+  expected_intent: question
+
+- id: q_sub_heavy_cream
+  category: question_substitution
+  utterance_text: "what can I use in place of heavy cream?"
+  expected_intent: question
+
+- id: q_sub_egg
+  category: question_substitution
+  utterance_text: "is there a good egg substitute for this?"
+  expected_intent: question
+
+# ==============================================================================
+# question — technique (10)
+# ==============================================================================
+
+- id: q_tech_al_dente
+  category: question_technique
+  utterance_text: "how do I know when the pasta is al dente?"
+  expected_intent: question
+  notes: "harvested from test_utterances.py::test_ack_always_within_12_words phrase"
+
+- id: q_tech_dice_onion
+  category: question_technique
+  utterance_text: "what's the best way to dice an onion?"
+  expected_intent: question
+
+- id: q_tech_garlic_brown
+  category: question_technique
+  utterance_text: "how do I stop garlic from burning?"
+  expected_intent: question
+
+- id: q_tech_sear_chicken
+  category: question_technique
+  utterance_text: "how do I get a good sear on chicken?"
+  expected_intent: question
+
+- id: q_tech_emulsion
+  category: question_technique
+  utterance_text: "how do I make the sauce emulsify?"
+  expected_intent: question
+
+- id: q_tech_julienne
+  category: question_technique
+  utterance_text: "what does julienne mean again?"
+  expected_intent: question
+
+- id: q_tech_salt_water
+  category: question_technique
+  utterance_text: "how salty should the pasta water be?"
+  expected_intent: question
+
+- id: q_tech_deglaze
+  category: question_technique
+  utterance_text: "what's the right way to deglaze a pan?"
+  expected_intent: question
+
+- id: q_tech_bloom_spices
+  category: question_technique
+  utterance_text: "should I bloom the spices in oil first?"
+  expected_intent: question
+
+- id: q_tech_rest_meat
+  category: question_technique
+  utterance_text: "how long should I let the meat rest?"
+  expected_intent: question
+
+# ==============================================================================
+# question — timing + temperature (10)
+# ==============================================================================
+
+- id: q_time_boil_pasta
+  category: question_timing
+  utterance_text: "how long should I boil the pasta?"
+  expected_intent: question
+  session_ingredients:
+    - name: pasta
+      qty: 200.0
+      unit: g
+      raw_phrase: "200 grams of pasta"
+  notes: "harvested from test_utterances.py::test_question_cooking_time"
+
+- id: q_time_temp_pan
+  category: question_timing
+  utterance_text: "what temperature should the pan be?"
+  expected_intent: question
+  notes: "harvested from test_utterances.py::test_question_temperature"
+
+- id: q_time_chicken_done
+  category: question_timing
+  utterance_text: "how long does chicken take to cook through?"
+  expected_intent: question
+
+- id: q_time_oven_temp
+  category: question_timing
+  utterance_text: "what oven temperature should I use for this?"
+  expected_intent: question
+
+- id: q_time_simmer_sauce
+  category: question_timing
+  utterance_text: "how long do I simmer the sauce?"
+  expected_intent: question
+
+- id: q_time_rice_done
+  category: question_timing
+  utterance_text: "how do I know when the rice is done?"
+  expected_intent: question
+
+- id: q_time_preheat
+  category: question_timing
+  utterance_text: "how long should I preheat the oven?"
+  expected_intent: question
+
+- id: q_time_low_medium
+  category: question_timing
+  utterance_text: "should this be on low or medium heat?"
+  expected_intent: question
+
+- id: q_time_eggs_soft
+  category: question_timing
+  utterance_text: "how many minutes for a soft-boiled egg?"
+  expected_intent: question
+
+- id: q_time_pasta_water_hot
+  category: question_timing
+  utterance_text: "how hot should the water be before adding pasta?"
+  expected_intent: question
+
+# ==============================================================================
+# acknowledgment — multi-word (10)
+# ==============================================================================
+
+- id: ack_got_it_thanks
+  category: acknowledgment_multi_word
+  utterance_text: "got it, thanks"
+  expected_intent: acknowledgment
+  notes: "harvested from test_utterances.py::test_acknowledgment_got_it"
+
+- id: ack_sounds_good
+  category: acknowledgment_multi_word
+  utterance_text: "sounds good"
+  expected_intent: acknowledgment
+  notes: "harvested from test_utterances.py::test_acknowledgment_sounds_good"
+
+- id: ack_yep_thats_right
+  category: acknowledgment_multi_word
+  utterance_text: "yep, that's right"
+  expected_intent: acknowledgment
+  notes: "harvested from test_utterances.py::test_acknowledgment_yep"
+
+- id: ack_perfect
+  category: acknowledgment_multi_word
+  utterance_text: "perfect, thanks"
+  expected_intent: acknowledgment
+
+- id: ack_makes_sense
+  category: acknowledgment_multi_word
+  utterance_text: "okay, that makes sense"
+  expected_intent: acknowledgment
+
+- id: ack_will_do
+  category: acknowledgment_multi_word
+  utterance_text: "will do"
+  expected_intent: acknowledgment
+
+- id: ack_thanks_chef
+  category: acknowledgment_multi_word
+  utterance_text: "thanks chef"
+  expected_intent: acknowledgment
+
+- id: ack_got_ya
+  category: acknowledgment_multi_word
+  utterance_text: "got ya"
+  expected_intent: acknowledgment
+
+- id: ack_no_worries
+  category: acknowledgment_multi_word
+  utterance_text: "no worries"
+  expected_intent: acknowledgment
+
+- id: ack_alright_cool
+  category: acknowledgment_multi_word
+  utterance_text: "alright, cool"
+  expected_intent: acknowledgment
+
+# ==============================================================================
+# acknowledgment — single-word (8)
+# ==============================================================================
+
+- id: ack_ok
+  category: acknowledgment_single_word
+  utterance_text: "ok"
+  expected_intent: acknowledgment
+  notes: "harvested from test_utterances.py::test_acknowledgment_ok"
+
+- id: ack_yes
+  category: acknowledgment_single_word
+  utterance_text: "yes"
+  expected_intent: acknowledgment
+  notes: "harvested from test_utterances.py::test_acknowledgment_yes"
+
+- id: ack_sure
+  category: acknowledgment_single_word
+  utterance_text: "sure"
+  expected_intent: acknowledgment
+  notes: "harvested from test_utterances.py::test_acknowledgment_sure"
+
+- id: ack_no
+  category: acknowledgment_single_word
+  utterance_text: "no"
+  expected_intent: acknowledgment
+  notes: "harvested from test_utterances.py::test_acknowledgment_no"
+
+- id: ack_yeah
+  category: acknowledgment_single_word
+  utterance_text: "yeah"
+  expected_intent: acknowledgment
+
+- id: ack_nope
+  category: acknowledgment_single_word
+  utterance_text: "nope"
+  expected_intent: acknowledgment
+
+- id: ack_mhm
+  category: acknowledgment_single_word
+  utterance_text: "mhm"
+  expected_intent: acknowledgment
+
+- id: ack_alright
+  category: acknowledgment_single_word
+  utterance_text: "alright"
+  expected_intent: acknowledgment
+
+# ==============================================================================
+# small_talk (10)
+# Critical: these must NOT drift toward add_ingredient. The past-tense
+# narration bucket is the inverse risk — both are boundary cases.
+# ==============================================================================
+
+- id: st_smells_amazing
+  category: small_talk
+  utterance_text: "this smells amazing"
+  expected_intent: small_talk
+  notes: "harvested from test_utterances.py::test_small_talk_smell"
+
+- id: st_so_helpful
+  category: small_talk
+  utterance_text: "you're so helpful"
+  expected_intent: small_talk
+  notes: "harvested from test_utterances.py::test_small_talk_compliment"
+
+- id: st_love_cooking
+  category: small_talk
+  utterance_text: "I love cooking with you"
+  expected_intent: small_talk
+
+- id: st_kitchen_messy
+  category: small_talk
+  utterance_text: "the kitchen is such a mess right now"
+  expected_intent: small_talk
+
+- id: st_hungry
+  category: small_talk
+  utterance_text: "I'm so hungry"
+  expected_intent: small_talk
+
+- id: st_looks_great
+  category: small_talk
+  utterance_text: "this looks really good"
+  expected_intent: small_talk
+
+- id: st_chef_mood
+  category: small_talk
+  utterance_text: "feeling like a real chef today"
+  expected_intent: small_talk
+
+- id: st_wife_loves_this
+  category: small_talk
+  utterance_text: "my wife is going to love this"
+  expected_intent: small_talk
+
+- id: st_first_time
+  category: small_talk
+  utterance_text: "it's my first time making this"
+  expected_intent: small_talk
+
+- id: st_tired
+  category: small_talk
+  utterance_text: "long day, glad I'm cooking"
+  expected_intent: small_talk
+
+# ==============================================================================
+# finish_recipe (10)
+# ==============================================================================
+
+- id: finish_all_done
+  category: finish_recipe
+  utterance_text: "I'm all done"
+  expected_intent: finish_recipe
+
+- id: finish_thats_everything
+  category: finish_recipe
+  utterance_text: "that's everything"
+  expected_intent: finish_recipe
+
+- id: finish_im_done
+  category: finish_recipe
+  utterance_text: "I'm done"
+  expected_intent: finish_recipe
+
+- id: finish_finished
+  category: finish_recipe
+  utterance_text: "finished"
+  expected_intent: finish_recipe
+
+- id: finish_ok_done
+  category: finish_recipe
+  utterance_text: "ok, I'm done cooking"
+  expected_intent: finish_recipe
+
+- id: finish_ready_to_eat
+  category: finish_recipe
+  utterance_text: "alright, ready to eat"
+  expected_intent: finish_recipe
+
+- id: finish_wrap_up
+  category: finish_recipe
+  utterance_text: "let's wrap this up"
+  expected_intent: finish_recipe
+
+- id: finish_thats_it
+  category: finish_recipe
+  utterance_text: "that's it"
+  expected_intent: finish_recipe
+
+- id: finish_complete
+  category: finish_recipe
+  utterance_text: "recipe is complete"
+  expected_intent: finish_recipe
+
+- id: finish_lets_finalize
+  category: finish_recipe
+  utterance_text: "let's finalize the recipe"
+  expected_intent: finish_recipe
+
+# ==============================================================================
+# clarification_reply (10) — pending_clarification is populated
+# ==============================================================================
+
+- id: clar_about_three_cloves
+  category: clarification_reply
+  utterance_text: "about three cloves"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: garlic
+    qty: 3.0
+  pending_clarification: "How much garlic would you like to add?"
+  notes: "harvested from test_utterances.py::test_clarification_answer_resolves"
+
+- id: clar_just_a_pinch
+  category: clarification_reply
+  utterance_text: "just a pinch"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: salt
+    qty: 0.125
+    unit: tsp
+  pending_clarification: "How much salt would you like to add?"
+  notes: "design doc §7 demo walkthrough step 8"
+
+- id: clar_two_tbsp
+  category: clarification_reply
+  utterance_text: "two tablespoons"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: olive oil
+    qty: 2.0
+    unit: tbsp
+  pending_clarification: "How much olive oil would you like to add?"
+
+- id: clar_half_cup
+  category: clarification_reply
+  utterance_text: "half a cup"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: flour
+    qty: 0.5
+    unit: cup
+  pending_clarification: "How much flour would you like to add?"
+
+- id: clar_a_splash
+  category: clarification_reply
+  utterance_text: "a splash"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: milk
+    qty: 1.0
+    unit: tsp
+  pending_clarification: "How much milk would you like to add?"
+
+- id: clar_maybe_a_handful
+  category: clarification_reply
+  utterance_text: "maybe a handful"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: spinach
+    qty: 0.5
+    unit: cup
+  pending_clarification: "How much spinach would you like to add?"
+
+- id: clar_no_just_a_bit
+  category: clarification_reply
+  utterance_text: "no, just a little bit"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: pepper
+  pending_clarification: "How much pepper would you like to add?"
+
+- id: clar_one_tsp
+  category: clarification_reply
+  utterance_text: "one teaspoon"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: paprika
+    qty: 1.0
+    unit: tsp
+  pending_clarification: "How much paprika would you like to add?"
+
+- id: clar_quarter_cup
+  category: clarification_reply
+  utterance_text: "a quarter cup"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: parmesan
+    qty: 0.25
+    unit: cup
+  pending_clarification: "How much parmesan would you like to add?"
+
+- id: clar_like_three
+  category: clarification_reply
+  utterance_text: "like three of them"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: tomato
+    qty: 3.0
+  pending_clarification: "How many tomatoes would you like to add?"
+
+# ==============================================================================
+# ambiguous / borderline (6)
+# Cases that stress the boundaries between intents. Labels here reflect the
+# most defensible human reading, not necessarily current model behavior.
+# ==============================================================================
+
+- id: amb_that_was_easy
+  category: ambiguous
+  utterance_text: "that was easy"
+  expected_intent: acknowledgment
+  notes: "commentary on the task just completed — closer to ack than small_talk"
+
+- id: amb_adding_some_love
+  category: ambiguous
+  utterance_text: "adding a little love"
+  expected_intent: small_talk
+  notes: "grammatically looks like past-tense ingredient add; semantically not an ingredient"
+
+- id: amb_need_to_check
+  category: ambiguous
+  utterance_text: "hold on, let me check the recipe"
+  expected_intent: small_talk
+  notes: "user talking to self; not a command"
+
+- id: amb_wondering_about_salt
+  category: ambiguous
+  utterance_text: "I wonder if I should add more salt"
+  expected_intent: question
+  notes: "phrased as musing but is effectively a question asking for advice"
+
+- id: amb_could_use_more_garlic
+  category: ambiguous
+  utterance_text: "could use more garlic"
+  expected_intent: add_ingredient
+  expected_ingredient:
+    name: garlic
+  notes: "self-directed but expresses intent to add more"
+
+- id: amb_smells_done
+  category: ambiguous
+  utterance_text: "smells like it's almost done"
+  expected_intent: small_talk
+  notes: "observational; could drift toward finish_recipe but user isn't finalizing"
