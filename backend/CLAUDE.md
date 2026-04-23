@@ -27,7 +27,8 @@ backend/
 │   ├── db.py                  Supabase wrapper
 │   ├── tts.py                 ElevenLabs streaming wrapper
 │   └── nutrition.py           Edamam wrapper
-├── gemini_client/             ATHARVA-OWNED. DO NOT EDIT. See its own CLAUDE.md.
+├── gemini_client/             Gemini client module. See its own CLAUDE.md for the contract.
+├── gemini_client/evals/       160-case classification eval suite; baseline-gated.
 ├── tests/
 │   ├── smoke/                 integration: /sessions → /utterance → /finalize
 │   └── unit/                  per-route happy + failure paths
@@ -39,7 +40,8 @@ backend/
 - **Schema-first.** New endpoint = new Pydantic model in `app/schemas/` → route in `app/routes/` → happy-path + one failure-path pytest. In that order.
 - **Dependency injection, always.** Supabase client, settings, Gemini client — all via `Depends()`. Never instantiate inline. Makes mocking in tests one-line.
 - **Secrets via `pydantic-settings`.** Load from `.env`. Never hardcode, never log.
-- **Import from `gemini_client`, never edit it.** If integration reveals a bug there, write to `docs/notes/<date>-gemini-client-<slug>.md` and open a GitHub issue tagged for Atharva. Do not patch locally.
+- **Import from `gemini_client`.** Either dev may edit it per the partner-workflow feedback memory; branch prefix identifies the driver, not ownership. Changes to the public contract (`process_utterance` signature, `UtteranceResponse` / `ParsedIngredient` fields) are breaking — flag explicitly in the PR description and coordinate so the mock in `backend/app/` stays in sync. For bugs that surface during integration, capture context in `docs/notes/<date>-gemini-client-<slug>.md` and link it from the PR.
+- **Run the eval suite after any gemini_client or prompt change.** `cd backend && uv run pytest gemini_client/evals/ -q` prints a per-intent scorecard gated on `baseline_scores.json`. Regressions below baseline fail the session; intentional improvements require a baseline bump with justification in the PR.
 - **Supabase migrations via CLI only.** `supabase migration new <name>` → edit the generated SQL → `supabase db reset` to apply. Never edit tables through the dashboard SQL editor — that creates silent drift between Rishi's and Atharva's local DBs.
 - **Smoke test is the completion bar.** `uv run pytest tests/smoke/ -x` must pass before declaring any backend change done.
 
