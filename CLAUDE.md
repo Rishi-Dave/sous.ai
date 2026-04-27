@@ -4,9 +4,9 @@ This file is loaded on every session and every subagent spawn. Keep it lean — 
 
 ## Project
 
-Sous Chef: an AI voice sous chef for an Expo + FastAPI + Gemini + ElevenLabs + Edamam + Supabase + Picovoice Porcupine stack. 36-hour hackathon. Two devs: **Rishi** (branch prefix `rh/`) owns mobile + backend API + integration; **Atharva** (prefix `ad/`) owns `backend/gemini_client/`.
+Sous Chef: an AI voice sous chef on an Expo + FastAPI + Gemini + ElevenLabs + Edamam + Supabase + Picovoice Porcupine stack. The hackathon prototype shipped; the project is now being pushed to production quality.
 
-Demo scenario: 3-minute pasta aglio e olio walk-through. See `.claude/memory/design-doc-summary.md` before anything else — do not re-read the full design doc (`docs/design.md`) unless the summary is insufficient.
+Two devs — **Rishi** (branch prefix `rh/`) and **Atharva** (prefix `ad/`). Free-for-all on issues: either dev can pick up any ticket; branch prefix identifies who's driving the change, not who owns the code. See `.claude/memory/design-doc-summary.md` before substantive work. Do not re-read the full design doc (`docs/design.md`) unless the summary is insufficient; update the summary when the doc changes.
 
 ## Architecture rules (non-negotiable)
 
@@ -17,28 +17,19 @@ Distilled from design doc §4, §7. Full detail in the summary.
 3. **Mobile never talks directly to Gemini / ElevenLabs / Edamam.** Backend is the only server.
 4. **Backend is stateless** except for Supabase state.
 5. **`gemini_client` is a pure function.** `(audio, session_ingredients, pending_clarification) → UtteranceResponse`. Imported, not reimplemented.
-6. **API contract lives in** `docs/design.md` §7 — summary in `.claude/memory/design-doc-summary.md`. Any change to request/response shapes is a breaking change; flag it explicitly.
-
-## Ownership boundaries (HARD)
-
-- **`backend/gemini_client/` is Atharva's.** Atharva edits freely here. Rishi never edits it — a deny rule in his settings blocks him.
-- If you are assisting **Rishi** and integration reveals a bug in `gemini_client`: write a note at `docs/notes/<YYYY-MM-DD>-gemini-client-<slug>.md`, open a GitHub issue tagged for Atharva. Do not patch locally.
-- If you are assisting **Atharva**: gemini_client is your primary domain — edit, test, iterate.
+6. **API contract lives in** `docs/design.md` §7 — summary in `.claude/memory/design-doc-summary.md`. Any change to request/response shapes is a breaking change; flag it explicitly and run `integration-checker`.
 
 ## Git rules (HARD)
 
-**Phase gate — the branching rule turns on only once Atharva has cloned and made at least one commit of his own.** Until then, the repo is a solo scaffolding exercise; committing pre-partner scaffolding straight to `main` is correct and expected. Rishi will tell Claude when to flip the switch ("Atharva has cloned" or similar). Until that signal, skip rule 1 and rule 7 — every other rule below still applies.
+Strict branching is always on. Production quality means we don't commit to `main` even when no one else is looking.
 
-Once the gate is crossed:
-
-1. **Never commit to `main`.** If on `main`, immediately `git switch -c ad/<slug>` (Atharva) or `rh/<slug>` (Rishi).
-2. **`git push` is allowed; `git push --force` is not** — the deny list still blocks force push. Before any push, show the diff + one-sentence summary of what's going out so the dev can object before it hits the remote.
+1. **Never commit to `main`.** If on `main`, immediately `git switch -c <prefix>/<slug>` — `rh/` for Rishi, `ad/` for Atharva. Kebab-case slug, ≤4 words. Examples: `rh/utterance-endpoint`, `ad/gemini-clarification`. The prefix reflects who's driving the change; either dev can work in any part of the codebase.
+2. **`git push` is allowed; `git push --force` is not** — the deny list blocks force push. Before any push, show the diff + one-sentence summary so the dev can object before it hits the remote.
 3. **Never `git reset --hard`, never `--no-verify`, never `--no-gpg-sign`.** Deny list blocks these.
 4. **Never auto-resolve merge conflicts.** On conflict: stop, show the markers, wait.
-5. **Branch naming:** `ad/<short-slug>` for Atharva, `rh/<short-slug>` for Rishi (kebab-case, ≤4 words). Examples: `ad/gemini-clarification`, `rh/utterance-endpoint`.
-6. **Commits:** small, focused, "why" over "what". Never `git add -A` or `git add .` — name specific files.
-7. **PRs as drafts.** Use the template at `.github/pull_request_template.md`.
-8. **Rebase, don't merge.** `git rebase origin/main` to pick up upstream.
+5. **Commits:** small, focused, "why" over "what". Never `git add -A` or `git add .` — name specific files.
+6. **PRs as drafts.** Use the template at `.github/pull_request_template.md`.
+7. **Rebase, don't merge.** `git rebase origin/main` to pick up upstream.
 
 Full reference: `.claude/skills/git-partner-workflow/SKILL.md`.
 
@@ -53,11 +44,11 @@ Full reference: `.claude/skills/git-partner-workflow/SKILL.md`.
 - **`.env` never committed.** Enforced by `.gitignore` + the deny list. If you need a new env var, update `.env.example` in the same commit and flag the key in the PR description.
 - **Never log, echo, or fixture-in secrets.**
 
-Dep-failure runbook lives in `.claude/skills/fastapi-patterns/SKILL.md` and `.claude/skills/expo-workflow/SKILL.md`.
+Dep-failure runbooks: `.claude/skills/fastapi-patterns/SKILL.md`, `.claude/skills/expo-workflow/SKILL.md`.
 
 ## Context discipline (the reason subagents exist)
 
-Main-thread context is the scarcest resource. Every file Claude reads becomes permanent context for the rest of the session. At hour 20, an undisciplined session is slow, expensive, and regressing earlier decisions.
+Main-thread context is the scarcest resource. Every file Claude reads becomes permanent context for the rest of the session.
 
 **Default to subagent delegation for:**
 - Any read >500 lines.
@@ -75,7 +66,7 @@ Main-thread context is the scarcest resource. Every file Claude reads becomes pe
 
 **Start a fresh session per major feature.** CLAUDE.md + `.claude/memory/decisions.md` + `docs/notes/` carry what matters across sessions. The chat history does not.
 
-**~50% context rule.** When you notice main-thread context approaching half of max, proactively suggest: `/compact`, writing state to a note, starting fresh, or delegating more.
+**~50% context rule.** When main-thread context approaches half of max, proactively suggest: `/compact`, writing state to a note, starting fresh, or delegating more.
 
 **Targeted tool use:**
 - `Read` with line ranges when a file exceeds ~200 lines.
@@ -113,18 +104,18 @@ Specific runbooks: `.claude/skills/voice-pipeline-debug/SKILL.md`, `.claude/skil
 
 A change is done only when **all** of the following are true:
 
-1. **Tests pass.** `pytest -x` green for backend changes. `npm test` green for mobile. The `test-runner` subagent confirms.
+1. **Tests pass.** `pytest -x` green for backend. `npm test` green for mobile. The `test-runner` subagent confirms.
 2. **Smoke test passes.** `cd backend && uv run pytest tests/smoke/ -x` — the `/sessions → /utterance → /finalize` integration test.
 3. **`code-reviewer` subagent returns `status: pass`.**
 4. **If API contract touched, `integration-checker` returns `consistent: true`.**
 5. **No hardcoded secrets.** No `.env` in diff.
-6. **Branch is `ad/<slug>` (Atharva) or `rh/<slug>` (Rishi), not `main`.**
+6. **Branch is `<prefix>/<slug>`, not `main`.**
 7. **PR template fields filled in.**
 
 Per-module DoD:
 
 - **M1 wake word + mic** — state machine transitions clean; 300ms re-arm buffer present; ding plays.
-- **M2 utterance processing** — `test_utterances.py` ≥80% in the `gemini_client` test harness. (Atharva's bar; Rishi verifies by running it before integrating.)
+- **M2 utterance processing** — `test_utterances.py` ≥80% in the `gemini_client` test harness.
 - **M3 clarification flow** — `pending_clarification` written and read across utterances; ≥3 test cases for the round-trip.
 - **M4 Q&A handler** — `answer` ≤2 sentences; TTS renders it.
 - **M5 macro computation** — Edamam failure on one ingredient does not fail the whole recipe.
@@ -136,8 +127,8 @@ When Claude first enters `mobile/`, `backend/`, or `backend/gemini_client/` and 
 
 ## Pointers
 
-- **How-to for the current stack:** `.claude/skills/` — expo-workflow, fastapi-patterns, supabase-ops, git-partner-workflow, voice-pipeline-debug, demo-readiness.
-- **What we decided:** `.claude/memory/decisions.md` (append-only). When Rishi accepts a non-trivial architectural call, append an entry (date, decision, rationale, alternatives).
+- **How-to for the current stack:** `.claude/skills/` — expo-workflow, fastapi-patterns, supabase-ops, git-partner-workflow, voice-pipeline-debug, release-readiness.
+- **What we decided:** `.claude/memory/decisions.md` (append-only). When a non-trivial architectural call is accepted, append an entry (date, decision, rationale, alternatives).
 - **Compressed design doc:** `.claude/memory/design-doc-summary.md`.
 - **In-flight working notes:** `docs/notes/<YYYY-MM-DD>-<slug>.md`.
 - **Ephemeral scratch:** `.claude/memory/scratch/` (never referenced across sessions).
