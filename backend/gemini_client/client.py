@@ -1,12 +1,17 @@
-import asyncio
-import json
+"""Orchestration entry point for utterance processing.
+
+Receives raw audio (or text), assembles context, calls the Groq chat loop with
+the system prompt, post-processes the response, and returns an
+UtteranceResponse for the FastAPI utterance route.
+"""
+
 import logging
-import os
 
 from dotenv import find_dotenv, load_dotenv
-from groq import AsyncGroq, RateLimitError
 
-from .nutrition_tool import NUTRITION_TOOL, dispatch_tool_call
+from . import _groq, postprocess
+from .context import assemble_context
+from .nutrition_tool import NUTRITION_TOOL
 from .schemas import ParsedIngredient, UtteranceResponse
 
 log = logging.getLogger(__name__)
@@ -98,96 +103,18 @@ for the user to give a quantity for that ingredient. Their next utterance is the
 
 Output ONLY the JSON object. Zero extra characters outside it."""
 
-_client: AsyncGroq | None = None
-
-
-def _get_client() -> AsyncGroq:
-    global _client
-    if _client is None:
-        _client = AsyncGroq(api_key=os.environ["GROQ_API_KEY"])
-    return _client
-
-
-def _build_context(
-    session_ingredients: list[ParsedIngredient],
-    pending_clarification: str | None,
-) -> str:
-    lines = []
-    if session_ingredients:
-        parts = []
-        for i in session_ingredients:
-            parts.append(f"{i.qty} {i.unit} {i.name}".strip() if i.qty else i.name)
-        lines.append(f"Ingredients added so far: {', '.join(parts)}")
-    if pending_clarification:
-        lines.append(f'You previously asked the user: "{pending_clarification}" — their reply follows.')
-    return "\n".join(lines)
-
-
-_PLURAL_UNITS = {
-    "cloves", "cups", "grams", "slices", "tsps", "tbsps",
-    "ounces", "pounds", "liters", "milliliters", "pieces", "heads",
-    "stalks", "leaves", "sprigs", "pinches", "dashes", "handfuls",
-}
-
-# Keyed on substrings of raw_phrase (lowercase). Applied after LLM response so
-# tests are deterministic even when the model ignores the prompt table.
-_VAGUE_QTY_MAP: list[tuple[str, float | None, str | None]] = [
-    ("splash",  1.0,   "tsp"),
-    ("pinch",   0.125, "tsp"),
-    ("dash",    0.5,   "tsp"),
-    ("drizzle", 1.0,   "tbsp"),
-    ("handful", 0.5,   "cup"),
-    ("to taste", None, None),
-]
-
-
-def _singularize_units(parsed: dict) -> None:
-    """Strip plural 's' from unit fields the LLM returns despite the singular instruction."""
-    for item in parsed.get("items") or []:
-        unit = (item.get("unit") or "").strip().lower()
-        if unit in _PLURAL_UNITS:
-            item["unit"] = unit.rstrip("s")
-
-
-def _normalize_vague_qty(parsed: dict) -> bool:
-    """Apply the canonical vague-qty table to items whose raw_phrase contains a known phrase.
-
-    Returns True if any item had its qty resolved from null to a concrete value."""
-    resolved_any = False
-    for item in parsed.get("items") or []:
-        phrase = (item.get("raw_phrase") or "").lower()
-        was_null = item.get("qty") is None
-        for keyword, qty, unit in _VAGUE_QTY_MAP:
-            if keyword in phrase:
-                item["qty"] = qty
-                item["unit"] = unit
-                if was_null and qty is not None:
-                    resolved_any = True
-                break
-    return resolved_any
-
-
-async def _transcribe(client: AsyncGroq, audio_bytes: bytes) -> str:
-    transcription = await client.audio.transcriptions.create(
-        file=("audio.wav", audio_bytes, "audio/wav"),
-        model="whisper-large-v3-turbo",
-    )
-    return transcription.text
-
 
 async def process_utterance(
     audio_bytes: bytes,
     session_ingredients: list[ParsedIngredient],
     pending_clarification: str | None,
 ) -> UtteranceResponse:
-    client = _get_client()
-    context = _build_context(session_ingredients, pending_clarification)
-
     try:
         spoken_text = audio_bytes.decode("utf-8")
     except UnicodeDecodeError:
-        spoken_text = await _transcribe(client, audio_bytes)
+        spoken_text = await _groq.transcribe(audio_bytes)
 
+    context = assemble_context(session_ingredients, pending_clarification)
     user_msg = f'User said: "{spoken_text}"'
     if context:
         user_msg = f"{context}\n\n{user_msg}"
@@ -197,61 +124,7 @@ async def process_utterance(
         {"role": "user", "content": user_msg},
     ]
 
-    log.info("groq input | messages=%s", json.dumps(messages, ensure_ascii=False))
-
-    # Agentic loop: let Groq call get_nutrition if it needs macro data.
-    for _ in range(5):
-        for attempt in range(4):
-            try:
-                response = await client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
-                    messages=messages,
-                    tools=[NUTRITION_TOOL],
-                    tool_choice="auto",
-                    temperature=0.1,
-                )
-                break
-            except RateLimitError:
-                if attempt == 3:
-                    raise
-                await asyncio.sleep(2 ** attempt)
-
-        choice = response.choices[0]
-
-        if choice.finish_reason == "tool_calls":
-            assistant_msg = choice.message.model_dump(exclude_unset=True)
-            messages.append(assistant_msg)
-            for tc in choice.message.tool_calls:
-                log.info(
-                    "nutrition tool call | fn=%s args=%s",
-                    tc.function.name,
-                    tc.function.arguments,
-                )
-                result = await dispatch_tool_call(tc.function.name, tc.function.arguments)
-                log.info(
-                    "nutrition tool result | fn=%s result=%s",
-                    tc.function.name,
-                    result,
-                )
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": result,
-                })
-            continue
-
-        raw = choice.message.content
-        start = raw.index("{")
-        end = raw.rindex("}") + 1
-        parsed = json.loads(raw[start:end])
-        _singularize_units(parsed)
-        resolved_vague = _normalize_vague_qty(parsed)
-        # LLM sometimes writes a clarification question for vague phrases it normalized —
-        # replace the ack with a confirmation so TTS doesn't speak an unanswerable question.
-        if resolved_vague and parsed.get("ack", "").rstrip().endswith("?"):
-            items = parsed.get("items") or []
-            phrase = items[0]["raw_phrase"] if items else "that"
-            parsed["ack"] = f"Got it, adding {phrase}."
-        return UtteranceResponse.model_validate(parsed)
-
-    raise RuntimeError("Tool-call loop exceeded max iterations")
+    raw = await _groq.chat_with_tools(messages, tools=[NUTRITION_TOOL])
+    parsed = _groq.extract_json(raw)
+    postprocess.apply(parsed)
+    return UtteranceResponse.model_validate(parsed)
