@@ -1,8 +1,7 @@
 """Per-mode handlers and the Mode→handler dispatch dict.
 
-The dispatch dict is consumed by client.process_utterance once the router
-is wired in (next commit). Until then client.py calls freestyle.handle
-directly to preserve current behaviour.
+client.process_utterance dispatches via HANDLERS[mode] after the router
+classifies the utterance.
 """
 
 from collections.abc import Awaitable, Callable
