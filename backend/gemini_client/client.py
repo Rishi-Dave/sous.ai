@@ -1,18 +1,17 @@
 """Orchestration entry point for utterance processing.
 
-Receives raw audio (or text), assembles context, dispatches to the
-freestyle handler (router and full Mode-keyed dispatch land in the next
-commit), post-processes the response, and returns an UtteranceResponse
-for the FastAPI utterance route.
+Receives raw audio (or text), classifies the mode via the hybrid router,
+dispatches to the matching handler, post-processes the response, and
+returns an UtteranceResponse for the FastAPI utterance route.
 """
 
 import logging
 
 from dotenv import find_dotenv, load_dotenv
 
-from . import _groq, postprocess
+from . import _groq, postprocess, router
 from .context import assemble_context
-from .handlers import HandlerInput, freestyle
+from .handlers import HANDLERS, HandlerInput
 from .schemas import ParsedIngredient, UtteranceResponse
 
 log = logging.getLogger(__name__)
@@ -30,6 +29,13 @@ async def process_utterance(
     except UnicodeDecodeError:
         spoken_text = await _groq.transcribe(audio_bytes)
 
+    mode = await router.classify(
+        transcript=spoken_text,
+        session_ingredients=session_ingredients,
+        pending_clarification=pending_clarification,
+    )
+    log.info("router | mode=%s transcript=%r", mode.value, spoken_text)
+
     handler_input = HandlerInput(
         transcript=spoken_text,
         context_str=assemble_context(session_ingredients, pending_clarification),
@@ -37,6 +43,6 @@ async def process_utterance(
         session_ingredients=session_ingredients,
     )
 
-    parsed = await freestyle.handle(handler_input)
+    parsed = await HANDLERS[mode](handler_input)
     postprocess.apply(parsed)
     return UtteranceResponse.model_validate(parsed)
