@@ -13,15 +13,46 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
 import pytest
 
+from gemini_client.router import Mode
+
 EVALS_DIR = Path(__file__).parent
 UTTERANCES_PATH = EVALS_DIR / "utterances.yaml"
 BASELINE_PATH = EVALS_DIR / "baseline_scores.json"
+
+
+# Default Mode per eval category. The router test uses this as the expected
+# mode unless the case sets `expected_mode` explicitly. Categories absent here
+# (e.g. `ambiguous`) are skipped from the router eval unless they declare
+# `expected_mode` per-case.
+_CATEGORY_TO_MODE: dict[str, Mode] = {
+    "add_ingredient_imperative": Mode.freestyle,
+    "add_ingredient_past_tense": Mode.freestyle,
+    "add_ingredient_vague_qty": Mode.freestyle,
+    "add_ingredient_no_qty": Mode.freestyle,
+    "add_ingredient_multi": Mode.freestyle,
+    "clarification_reply": Mode.freestyle,
+    "finish_recipe": Mode.freestyle,
+    "question_substitution": Mode.qa,
+    "question_technique": Mode.qa,
+    "question_timing": Mode.qa,
+    "small_talk": Mode.small_talk,
+    "acknowledgment_multi_word": Mode.small_talk,
+    "acknowledgment_single_word": Mode.small_talk,
+}
+
+
+def expected_mode_for(case: dict) -> Mode | None:
+    explicit = case.get("expected_mode")
+    if explicit:
+        return Mode(explicit)
+    return _CATEGORY_TO_MODE.get(case.get("category", ""))
 
 
 @pytest.fixture(autouse=True)
@@ -79,10 +110,17 @@ class Scorecard:
 # going through the fixture machinery.
 _SCORECARD = Scorecard()
 
+# Router eval results — keyed on expected mode, list of pass bools per case.
+_ROUTER_RESULTS: dict[str, list[bool]] = defaultdict(list)
+
 
 @pytest.fixture(scope="session")
 def scorecard() -> Scorecard:
     return _SCORECARD
+
+
+def record_router_result(expected_mode: str, passed: bool) -> None:
+    _ROUTER_RESULTS[expected_mode].append(passed)
 
 
 def _load_baseline() -> dict:
@@ -104,7 +142,7 @@ def _fmt_line(label: str, passed: int, total: int, baseline: float | None, tol: 
 
 def pytest_sessionfinish(session, exitstatus):
     sc = _SCORECARD
-    if not sc.results:
+    if not sc.results and not _ROUTER_RESULTS:
         return
 
     reporter = session.config.pluginmanager.getplugin("terminalreporter")
@@ -113,6 +151,11 @@ def pytest_sessionfinish(session, exitstatus):
 
     baseline = _load_baseline()
     tol = baseline.get("tolerance", 0.0) if baseline else 0.0
+
+    if _ROUTER_RESULTS:
+        _report_router_scorecard(reporter, baseline, tol, session)
+        if not sc.results:
+            return
 
     reporter.write_sep("=", "Gemini eval scorecard")
 
@@ -175,6 +218,41 @@ def pytest_sessionfinish(session, exitstatus):
             f"{proposed_path.name}. Review, adjust the 'notes' field, "
             f"then rename to baseline_scores.json and commit."
         )
+
+
+def _report_router_scorecard(reporter, baseline: dict, tol: float, session) -> None:
+    reporter.write_sep("=", "Router scorecard")
+    per_mode_baseline = baseline.get("per_mode", {}) if baseline else {}
+
+    overall_passed = sum(sum(rs) for rs in _ROUTER_RESULTS.values())
+    overall_total = sum(len(rs) for rs in _ROUTER_RESULTS.values())
+    reporter.write_line(
+        _fmt_line("OVERALL", overall_passed, overall_total, per_mode_baseline.get("overall"), tol)
+    )
+    reporter.write_line("")
+    reporter.write_line("Per mode:")
+    for mode, results in sorted(_ROUTER_RESULTS.items()):
+        p = sum(results)
+        t = len(results)
+        reporter.write_line(_fmt_line(mode, p, t, per_mode_baseline.get(mode), tol))
+
+    if baseline and "per_mode" in baseline:
+        regressed = False
+        for mode, threshold in baseline["per_mode"].items():
+            if mode == "overall":
+                continue
+            results = _ROUTER_RESULTS.get(mode)
+            if not results:
+                continue
+            if sum(results) / len(results) < threshold - tol:
+                regressed = True
+        if "overall" in baseline["per_mode"] and overall_total:
+            if overall_passed / overall_total < baseline["per_mode"]["overall"] - tol:
+                regressed = True
+        if regressed:
+            reporter.write_line("")
+            reporter.write_line("ROUTER BASELINE REGRESSION — failing session.")
+            session.exitstatus = 1
 
 
 def _build_proposed_baseline(sc: Scorecard) -> dict:

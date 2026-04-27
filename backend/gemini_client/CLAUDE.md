@@ -2,6 +2,8 @@
 
 Classification, ingredient extraction, clarification, and Q&A for `/utterance`. Either dev may edit this module per the partner-workflow feedback memory — branch prefix identifies the driver, not ownership. Breaking contract changes still require coordination.
 
+> Naming note: the module is named `gemini_client` for historical reasons. The current implementation calls Groq (`llama-3.1-8b-instant` for chat, `whisper-large-v3-turbo` for transcription). A rename is out of scope for now.
+
 ## Public contract
 
 ```python
@@ -16,19 +18,41 @@ async def process_utterance(
 
 Changes to the function signature or to `UtteranceResponse` / `ParsedIngredient` / `Intent` are **breaking**. Flag explicitly in the PR description and re-run the mock in `backend/app/` so the integration stays in sync.
 
-## What lives here
+## Module structure
 
-- `client.py` — `process_utterance` + the Groq call + the system prompt.
-- `schemas.py` — Pydantic types (`Intent`, `ParsedIngredient`, `UtteranceResponse`).
-- `tests/test_utterances.py` — semantic assertion tests (e.g. "ack contains a question when qty=null"). Rich, low-volume. Targets ≥80% pre-integration.
-- `evals/` — YAML-driven classification eval, 160 cases across 14 categories. Baseline-gated; see [evals/README.md](evals/README.md). Run before merging any prompt change.
+```
+gemini_client/
+├── client.py        process_utterance — orchestration only (transcribe → route → dispatch → postprocess → validate)
+├── router.py        Mode enum + hybrid classify(): heuristic fast-paths, then LLM fallback
+├── context.py       assemble_context(session_ingredients, pending_clarification)
+├── postprocess.py   apply(): singularize units, normalize vague qty, rewrite vague-qty clarification questions
+├── _groq.py         Private IO layer: client singleton, Whisper transcription, agentic chat+tool-call loop, JSON extraction
+├── handlers/
+│   ├── freestyle.py    add_ingredient + finish_recipe (the bulk of utterances)
+│   ├── qa.py           question (substitution / technique / timing / doneness)
+│   ├── small_talk.py   acknowledgment + small_talk
+│   └── recipe.py       STUB — reserved for #25
+├── prompts/
+│   ├── router.txt       4-way classification, ≤20 lines
+│   ├── freestyle.txt    extraction + finish detection
+│   ├── qa.txt           cooking advice
+│   └── small_talk.txt   short friendly reply
+├── nutrition_tool.py   Edamam wrapper (used by freestyle handler only)
+├── schemas.py          Pydantic types: Intent, ParsedIngredient, UtteranceResponse
+├── tests/test_utterances.py   semantic assertion harness
+└── evals/              YAML-driven eval suite (160 end-to-end cases + 154 router-only cases). Baseline-gated.
+```
+
+The router decides which handler runs. Handlers each have a focused prompt and emit a narrower JSON shape — the orchestration layer in `client.py` validates against `UtteranceResponse` (Pydantic fills absent optional fields).
 
 ## Dev loop
 
 ```bash
 cd backend
 uv run pytest gemini_client/tests/test_utterances.py -v   # semantic harness
-uv run pytest gemini_client/evals/ -q                     # classification eval (~40 min live)
+uv run pytest gemini_client/evals/test_router.py -q       # router-only eval (~9 min live)
+uv run pytest gemini_client/evals/test_eval.py -q         # end-to-end classification eval (~30-40 min live)
+uv run pytest gemini_client/evals/ -q                     # both
 uv run python -m gemini_client.evals._lint                # offline schema check
 ```
 
@@ -45,13 +69,15 @@ Run the eval harness after every prompt change. A regression below the committed
 | handful | 0.5 cup |
 | to taste | null |
 
+Lives in `postprocess.py` and is also reflected in `prompts/freestyle.txt`. Both must agree.
+
 ## Regression targets on file
 
-When you iterate on the prompt, these are the known failure modes to beat (per `docs/notes/2026-04-18-*`):
+When you iterate on the prompt, these are the historical failure modes baselined into `evals/baseline_scores.json`. The router + per-handler split (PR #36) lifted all three on a measured run; the baseline is intentionally **not** bumped in that PR — the improvements stay visible as headroom and the bump can be made after a stable run or two.
 
-- Past-tense narration (_"added oil"_, _"throwing in some garlic"_) misclassifies as `acknowledgment` / `small_talk` instead of `add_ingredient`. Eval category: `add_ingredient_past_tense`, currently baselined at 0.75.
-- `add_ingredient` with `qty=null` (_"I want milk"_) returns a generic confirmation instead of the prescribed _"How much milk would you like to add?"_ question. Eval category: `add_ingredient_no_qty`, baselined at 0.80.
-- `q_sub_heavy_cream` triggers a JSON-extra-data Pydantic validation error — the route has a soft-fall workaround; the root cause is in the Groq output format.
+- Past-tense narration (_"added oil"_, _"throwing in some garlic"_) misclassified as `acknowledgment` / `small_talk` instead of `add_ingredient`. Eval category: `add_ingredient_past_tense`, baseline 0.75. Now scoring 1.0 on the focused freestyle prompt.
+- `add_ingredient` with `qty=null` (_"I want milk"_) returned a generic confirmation instead of the prescribed _"How much milk would you like to add?"_ question. Eval category: `add_ingredient_no_qty`, baseline 0.80. Now scoring 1.0.
+- `q_sub_heavy_cream` triggered a JSON-extra-data Pydantic validation error — the route has a soft-fall workaround; the root cause is in the Groq output format. Out of scope for the router refactor.
 
 ## Cross-cutting PR discipline
 
