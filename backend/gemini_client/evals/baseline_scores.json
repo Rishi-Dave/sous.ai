@@ -23,8 +23,14 @@
     "clarification_reply": 1.0,
     "ambiguous": 0.5
   },
+  "per_mode": {
+    "overall": 0.994,
+    "freestyle": 0.989,
+    "qa": 1.0,
+    "small_talk": 1.0
+  },
   "tolerance": 0.0,
   "measured_on": "2026-04-22",
   "model_snapshot": "llama-3.1-8b-instant (Groq)",
-  "notes": "Initial measured baseline from 160-case run, 0:38:56 wall. Low scores in add_ingredient_past_tense (0.75), acknowledgment_multi_word (0.70), and ambiguous (0.50) intentionally lock in current broken/borderline behavior so any improvement is visible as a score lift. Next improvement targets (in priority order): (1) past-tense narration regression documented in docs/notes/2026-04-18-gemini-client-clarification-ack-regression.md — 5 cases drift to acknowledgment instead of add_ingredient; (2) 'I want milk' / 'add olive oil' bare add_ingredient cases returning empty items; (3) acknowledgment_multi_word 'perfect thanks' / 'thanks chef' / 'no worries' drifting to small_talk. One more case (q_sub_heavy_cream) raised a Pydantic ValidationError — the current runner catches exceptions and scores them as failures, so future runs will show 160/160 denominator; this baseline reflects the pre-fix 159 denominator. Update only with PR justification."
+  "notes": "Initial measured baseline from 160-case run, 0:38:56 wall. Low scores in add_ingredient_past_tense (0.75), acknowledgment_multi_word (0.70), and ambiguous (0.50) intentionally lock in current broken/borderline behavior so any improvement is visible as a score lift. Next improvement targets (in priority order): (1) past-tense narration regression documented in docs/notes/2026-04-18-gemini-client-clarification-ack-regression.md — 5 cases drift to acknowledgment instead of add_ingredient; (2) 'I want milk' / 'add olive oil' bare add_ingredient cases returning empty items; (3) acknowledgment_multi_word 'perfect thanks' / 'thanks chef' / 'no worries' drifting to small_talk. One more case (q_sub_heavy_cream) raised a Pydantic ValidationError — the current runner catches exceptions and scores them as failures, so future runs will show 160/160 denominator; this baseline reflects the pre-fix 159 denominator. per_mode added 2026-04-26 from a 154-case router-only run (recipe has no eval cases yet); freestyle 95/96 reflects one finish-narration case ('let's finalize') that the router prompt was subsequently tightened against. Update only with PR justification."
 }

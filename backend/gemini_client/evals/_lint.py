@@ -25,6 +25,7 @@ from pathlib import Path
 import yaml
 
 from gemini_client import Intent
+from gemini_client.router import Mode
 
 EVALS_DIR = Path(__file__).parent
 UTTERANCES_PATH = EVALS_DIR / "utterances.yaml"
@@ -32,6 +33,7 @@ BASELINE_PATH = EVALS_DIR / "baseline_scores.json"
 
 CASE_FLOOR = 150
 VALID_INTENTS = {i.value for i in Intent}
+VALID_MODES = {m.value for m in Mode}
 
 
 def _lint_utterances() -> list[str]:
@@ -79,6 +81,12 @@ def _lint_utterances() -> list[str]:
         if exp_ing is not None:
             if not isinstance(exp_ing, dict) or "name" not in exp_ing:
                 errors.append(f"[{cid or i}] expected_ingredient must have a 'name'")
+
+        exp_mode = case.get("expected_mode")
+        if exp_mode is not None and exp_mode not in VALID_MODES:
+            errors.append(
+                f"[{cid or i}] expected_mode={exp_mode!r} not in {sorted(VALID_MODES)}"
+            )
 
     return errors
 

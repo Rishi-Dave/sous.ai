@@ -12,15 +12,26 @@ scorecard, baseline-gated.
 
 ```bash
 cd backend
+
+# Full end-to-end suite (intent/ingredient scoring) — ~40 min wall.
+uv run pytest gemini_client/evals/test_eval.py -v --tb=short
+
+# Router-only eval (mode classification, no handlers) — ~9 min wall.
+uv run pytest gemini_client/evals/test_router.py -q --tb=short
+
+# Both:
 uv run pytest gemini_client/evals/ -v --tb=short
 ```
 
-The run takes ~40 minutes wall time (measured 0:38:56 on the 2026-04-22
-baseline run): 160 cases × 1.5s rate-limit + model latency. It calls the
-live Groq API — `GROQ_API_KEY` must be set in your shell or in the
-repo-root `.env` (the client calls `dotenv.find_dotenv()`, which walks up
-the tree). Check with `echo $GROQ_API_KEY | head -c 8` or `grep GROQ
-../.env`.
+`test_eval.py` runs ~40 minutes wall time (measured 0:38:56 on the
+2026-04-22 baseline run): 160 cases × 1.5s rate-limit + model latency.
+`test_router.py` runs ~9 minutes (154 cases — the 6 ambiguous-category
+cases are unmoded by default).
+
+Both call the live Groq API — `GROQ_API_KEY` must be set in your shell
+or in the repo-root `.env` (the client calls `dotenv.find_dotenv()`,
+which walks up the tree). Check with `echo $GROQ_API_KEY | head -c 8`
+or `grep GROQ ../.env`.
 
 At the end, the scorecard prints to the terminal. Example:
 
@@ -114,8 +125,23 @@ Each row is self-contained:
       unit: g
       raw_phrase: "200 grams of pasta"
   pending_clarification: "How much salt?" # optional; prior clarifying question
+  expected_mode: freestyle              # optional; overrides the per-category
+                                        # default in conftest._CATEGORY_TO_MODE.
+                                        # Used by test_router.py only.
   notes: "cite docs/notes/*.md if this is a regression target"
 ```
+
+### Router eval (`test_router.py`)
+
+Tests `router.classify()` in isolation — no handler call, no Groq tool
+loop, no transcription. Each case's expected mode comes from the YAML
+`expected_mode` field if present, otherwise from the per-category default
+in `conftest._CATEGORY_TO_MODE`. Cases with neither are skipped. Today
+that is the 6 `ambiguous` cases.
+
+The per-mode scorecard is gated against `baseline_scores.json#per_mode`
+the same way as `per_intent` / `per_category`. `recipe` mode currently
+has no eval cases — it is reserved for the recipe-following feature.
 
 ### Comparator rules
 
@@ -154,6 +180,7 @@ evals/
 ├── baseline_scores.proposed.json  auto-written on first run for review
 ├── conftest.py                scorecard + baseline gate (pytest_sessionfinish)
 ├── test_eval.py               parametrized runner; one test per YAML row
+├── test_router.py             router-isolation eval; one test per YAML row with a mode
 └── _lint.py                   offline schema checker; runs in CI
 ```
 
