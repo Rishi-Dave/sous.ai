@@ -193,6 +193,7 @@ def pytest_sessionfinish(session, exitstatus):
     if _ROUTER_RESULTS:
         _report_router_scorecard(reporter, baseline, tol, session)
         if not sc.results:
+            _write_eval_results_json(sc, baseline)
             return
 
     reporter.write_sep("=", "Gemini eval scorecard")
