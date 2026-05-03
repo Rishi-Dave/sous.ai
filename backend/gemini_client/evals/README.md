@@ -50,9 +50,9 @@ ollama serve   # in another terminal; serves at http://localhost:11434
 Run the suite against Ollama:
 
 ```bash
-LLM_BASE_URL=http://localhost:11434/v1 \
+LLM_BASE_URL=http://localhost:11434 \
 LLM_API_KEY=ollama \
-LLM_MODEL=llama3.1:8b \
+LLM_MODEL=llama3:8b \
 EVAL_RATE_LIMIT_DELAY=0 \
 uv run pytest gemini_client/evals/ -q --tb=short
 ```
@@ -61,6 +61,17 @@ The Groq SDK accepts a `base_url`; `gemini_client/config.py` reads
 `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` and threads them through
 `_groq.get_client()`. `EVAL_RATE_LIMIT_DELAY=0` disables the per-test
 sleep that otherwise protects the Groq free tier.
+
+**`LLM_BASE_URL` must not end in `/v1`** — the Groq SDK appends
+`/openai/v1/chat/completions` itself; an httpx transport in
+`_groq.py` rewrites that to `/v1/chat/completions` when the base URL
+isn't Groq, so Ollama's OpenAI-compatible endpoint at
+`http://localhost:11434/v1/chat/completions` is hit correctly.
+
+If you have a newer Ollama (`>= 0.5`-ish) you can pull `llama3.1:8b`;
+older versions (e.g. `0.22.x`) reject the manifest, so use `llama3:8b`
+as a directional substitute. Either way, threshold values tuned on
+Ollama are not final — re-validate against Groq.
 
 **Caveat — Ollama is quantized.** Local `llama3.1:8b` is typically a
 `q4_K_M` weight while Groq runs full-precision inference, so per-case
