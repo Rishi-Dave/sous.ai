@@ -53,9 +53,14 @@ Run the suite against Ollama:
 LLM_BASE_URL=http://localhost:11434 \
 LLM_API_KEY=ollama \
 LLM_MODEL=llama3:8b \
+LLM_TOOLS_DISABLED=1 \
 EVAL_RATE_LIMIT_DELAY=0 \
 uv run pytest gemini_client/evals/ -q --tb=short
 ```
+
+`LLM_TOOLS_DISABLED=1` is required for tool-incapable local models (Ollama
+`llama3:8b` returns HTTP 400 on `tools=[...]`). Production with Groq +
+`llama-3.1-8b-instant` does support tools and runs without the flag.
 
 The Groq SDK accepts a `base_url`; `gemini_client/config.py` reads
 `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` and threads them through

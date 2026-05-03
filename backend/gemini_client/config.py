@@ -17,6 +17,13 @@ LLM_BASE_URL: str | None = os.environ.get("LLM_BASE_URL") or None
 LLM_API_KEY: str = os.environ.get("LLM_API_KEY") or os.environ.get("GROQ_API_KEY", "")
 LLM_MODEL: str = os.environ.get("LLM_MODEL", "llama-3.1-8b-instant")
 
+# Some local models (e.g. Ollama llama3:8b) reject `tools=[...]` with HTTP 400.
+# Default off so production stays unchanged. Set LLM_TOOLS_DISABLED=1 when
+# iterating against a non-tool-capable backend — the freestyle handler will
+# skip the Edamam tool call. Eval scoring (intent + ingredient name) doesn't
+# depend on the tool, only on the model's text extraction.
+LLM_TOOLS_DISABLED: bool = os.environ.get("LLM_TOOLS_DISABLED", "").lower() in ("1", "true", "yes")
+
 ROUTER_CONFIDENCE_THRESHOLD: float = float(
     os.environ.get("LLM_ROUTER_CONFIDENCE_THRESHOLD", "0.7")
 )
