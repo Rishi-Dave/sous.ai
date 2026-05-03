@@ -33,6 +33,41 @@ or in the repo-root `.env` (the client calls `dotenv.find_dotenv()`,
 which walks up the tree). Check with `echo $GROQ_API_KEY | head -c 8`
 or `grep GROQ ../.env`.
 
+## Iteration loop against a local Ollama
+
+The Groq run is the gate, but it's slow (~40 min wall) and rate-limited.
+For prompt iteration and threshold tuning, point the suite at a local
+Ollama instead — it's free, no rate limit, and a full 160-case run
+finishes in a few minutes.
+
+Setup once:
+
+```bash
+ollama pull llama3.1:8b
+ollama serve   # in another terminal; serves at http://localhost:11434
+```
+
+Run the suite against Ollama:
+
+```bash
+LLM_BASE_URL=http://localhost:11434/v1 \
+LLM_API_KEY=ollama \
+LLM_MODEL=llama3.1:8b \
+EVAL_RATE_LIMIT_DELAY=0 \
+uv run pytest gemini_client/evals/ -q --tb=short
+```
+
+The Groq SDK accepts a `base_url`; `gemini_client/config.py` reads
+`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` and threads them through
+`_groq.get_client()`. `EVAL_RATE_LIMIT_DELAY=0` disables the per-test
+sleep that otherwise protects the Groq free tier.
+
+**Caveat — Ollama is quantized.** Local `llama3.1:8b` is typically a
+`q4_K_M` weight while Groq runs full-precision inference, so per-case
+classifications can differ. Confidence values and threshold tuning
+done on Ollama are **directional**, not final. Re-validate against
+Groq before locking a baseline change.
+
 At the end, the scorecard prints to the terminal. Example:
 
 ```

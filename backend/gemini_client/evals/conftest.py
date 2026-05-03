@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
@@ -25,6 +26,8 @@ from gemini_client.router import Mode
 EVALS_DIR = Path(__file__).parent
 UTTERANCES_PATH = EVALS_DIR / "utterances.yaml"
 BASELINE_PATH = EVALS_DIR / "baseline_scores.json"
+
+_RATE_LIMIT_DELAY = float(os.environ.get("EVAL_RATE_LIMIT_DELAY", "1.5"))
 
 
 # Default Mode per eval category. The router test uses this as the expected
@@ -57,10 +60,15 @@ def expected_mode_for(case: dict) -> Mode | None:
 
 @pytest.fixture(autouse=True)
 async def rate_limit_buffer():
-    """Sleep 1.5s after each test. Groq free tier throttles aggressively;
-    this mirrors the sleep in backend/gemini_client/tests/test_utterances.py."""
+    """Sleep between tests to respect provider rate limits.
+
+    Default 1.5s mirrors the Groq free-tier sleep used elsewhere in tests.
+    Override via EVAL_RATE_LIMIT_DELAY (e.g. set to 0 when iterating against
+    a local Ollama).
+    """
     yield
-    await asyncio.sleep(1.5)
+    if _RATE_LIMIT_DELAY > 0:
+        await asyncio.sleep(_RATE_LIMIT_DELAY)
 
 
 @dataclass

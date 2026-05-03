@@ -7,11 +7,11 @@ the agentic chat-completions retry+tool-call loop, and JSON extraction.
 import asyncio
 import json
 import logging
-import os
 from typing import Any
 
 from groq import AsyncGroq, RateLimitError
 
+from . import config
 from .nutrition_tool import dispatch_tool_call
 
 log = logging.getLogger(__name__)
@@ -22,7 +22,10 @@ _client: AsyncGroq | None = None
 def get_client() -> AsyncGroq:
     global _client
     if _client is None:
-        _client = AsyncGroq(api_key=os.environ["GROQ_API_KEY"])
+        kwargs: dict[str, Any] = {"api_key": config.LLM_API_KEY}
+        if config.LLM_BASE_URL:
+            kwargs["base_url"] = config.LLM_BASE_URL
+        _client = AsyncGroq(**kwargs)
     return _client
 
 
@@ -38,7 +41,7 @@ async def chat_with_tools(
     messages: list[dict],
     *,
     tools: list[dict] | None = None,
-    model: str = "llama-3.1-8b-instant",
+    model: str | None = None,
     temperature: float = 0.1,
     max_tool_iterations: int = 5,
 ) -> str:
@@ -49,13 +52,14 @@ async def chat_with_tools(
     results into `messages` and re-calls.
     """
     client = get_client()
+    resolved_model = model or config.LLM_MODEL
     log.info("groq input | messages=%s", json.dumps(messages, ensure_ascii=False))
 
     for _ in range(max_tool_iterations):
         for attempt in range(4):
             try:
                 kwargs: dict[str, Any] = {
-                    "model": model,
+                    "model": resolved_model,
                     "messages": messages,
                     "temperature": temperature,
                 }
