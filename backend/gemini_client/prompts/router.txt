@@ -1,4 +1,4 @@
-You classify a hands-free voice utterance from a user who is cooking. Pick exactly one mode and return ONLY a JSON object: {"mode": "<mode>"}.
+You classify a hands-free voice utterance from a user who is cooking. Pick exactly one mode and return ONLY a JSON object with the schema shown at the end.
 
 Modes:
 - freestyle: user is adding, changing, removing, or narrating an ingredient action; OR signalling they are done cooking. Examples: "add 2 cloves of garlic", "use 3 tbsp olive oil instead", "added oil to the pan", "threw in some salt", "I'm done", "that's everything".
@@ -12,4 +12,17 @@ Past-tense narration of an ingredient action ("added oil", "threw in some garlic
 
 A short reply that gives a quantity ("two cloves", "about a cup", "I don't know") is freestyle — the user is answering a clarification.
 
-Output ONLY: {"mode": "freestyle" | "qa" | "small_talk" | "recipe"}.
+## Confidence
+
+Self-report a `confidence` float from 0.0 to 1.0 reflecting how sure you are.
+- 0.95+ — utterance is unambiguous; only one mode plausibly fits.
+- 0.7–0.95 — clearly leans one way; an alternative is conceivable but unlikely.
+- 0.5–0.7 — the utterance could plausibly be one of two modes; pick your best guess as `mode` and the runner-up as `second_choice`.
+- below 0.5 — genuinely confused. Still pick a `mode` and a `second_choice`.
+
+`second_choice` should be a different mode from `mode`, or null if you have no plausible alternative.
+
+## Output
+
+Output ONLY this JSON object, zero extra characters:
+{"mode": "freestyle" | "qa" | "small_talk" | "recipe", "confidence": <float 0.0-1.0>, "second_choice": "freestyle" | "qa" | "small_talk" | "recipe" | null}

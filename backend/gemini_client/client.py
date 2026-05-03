@@ -29,12 +29,19 @@ async def process_utterance(
     except UnicodeDecodeError:
         spoken_text = await _groq.transcribe(audio_bytes)
 
-    mode = await router.classify(
+    classification = await router.classify(
         transcript=spoken_text,
         session_ingredients=session_ingredients,
         pending_clarification=pending_clarification,
     )
-    log.info("router | mode=%s transcript=%r", mode.value, spoken_text)
+    log.info(
+        "router | mode=%s confidence=%s source=%s second=%s transcript=%r",
+        classification.mode.value,
+        classification.confidence,
+        classification.source,
+        classification.second_choice.value if classification.second_choice else None,
+        spoken_text,
+    )
 
     handler_input = HandlerInput(
         transcript=spoken_text,
@@ -43,6 +50,6 @@ async def process_utterance(
         session_ingredients=session_ingredients,
     )
 
-    parsed = await HANDLERS[mode](handler_input)
+    parsed = await HANDLERS[classification.mode](handler_input)
     postprocess.apply(parsed)
     return UtteranceResponse.model_validate(parsed)

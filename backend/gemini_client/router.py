@@ -4,11 +4,21 @@ classify() decides which handler will run. Heuristic fast-paths short-circuit
 the cheap common cases (clarification reply, single-word ack, explicit
 finish, recipe-mode session); everything else goes to a small Groq call
 with a tight 4-way classification prompt.
+
+The return type is `Classification` — it carries the chosen mode plus
+self-reported confidence and the second-best mode when the LLM was used.
+Heuristic short-circuits return confidence=None and source="heuristic".
+The orchestrator uses this to decide whether to ask a disambiguation
+question instead of dispatching the handler.
 """
 
+from __future__ import annotations
+
 import logging
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 from . import _groq
 from .schemas import ParsedIngredient
@@ -21,6 +31,14 @@ class Mode(StrEnum):
     qa = "qa"
     small_talk = "small_talk"
     recipe = "recipe"
+
+
+@dataclass(frozen=True)
+class Classification:
+    mode: Mode
+    confidence: float | None
+    second_choice: Mode | None
+    source: Literal["heuristic", "llm"]
 
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "router.txt"
@@ -49,39 +67,74 @@ def _normalize(text: str) -> str:
     return text.strip().lower().rstrip(".!?,")
 
 
+def _heuristic(mode: Mode) -> Classification:
+    return Classification(mode=mode, confidence=None, second_choice=None, source="heuristic")
+
+
 async def classify(
     transcript: str,
     session_ingredients: list[ParsedIngredient],
     pending_clarification: str | None,
     recipe_id: str | None = None,
-) -> Mode:
+) -> Classification:
     if pending_clarification is not None:
-        return Mode.freestyle
+        return _heuristic(Mode.freestyle)
 
     if recipe_id is not None:
-        return Mode.recipe
+        return _heuristic(Mode.recipe)
 
     normalized = _normalize(transcript)
 
     if normalized in _FINISH_PHRASES:
-        return Mode.freestyle
+        return _heuristic(Mode.freestyle)
 
     if normalized in _SHORT_ACKS:
-        return Mode.small_talk
+        return _heuristic(Mode.small_talk)
 
     return await _llm_classify(transcript)
 
 
-async def _llm_classify(transcript: str) -> Mode:
+def _parse_mode(value: object) -> Mode | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return Mode(value)
+    except ValueError:
+        return None
+
+
+def _parse_confidence(value: object) -> float | None:
+    try:
+        f = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if not 0.0 <= f <= 1.0:
+        return None
+    return f
+
+
+async def _llm_classify(transcript: str) -> Classification:
     messages: list[dict] = [
         {"role": "system", "content": _ROUTER_PROMPT},
         {"role": "user", "content": f'User said: "{transcript}"'},
     ]
     raw = await _groq.chat_with_tools(messages)
     parsed = _groq.extract_json(raw)
-    mode_str = parsed.get("mode", "")
-    try:
-        return Mode(mode_str)
-    except ValueError:
-        log.warning("router returned unknown mode=%r; defaulting to freestyle", mode_str)
-        return Mode.freestyle
+
+    mode = _parse_mode(parsed.get("mode"))
+    if mode is None:
+        log.warning("router returned unknown mode=%r; defaulting to freestyle", parsed.get("mode"))
+        mode = Mode.freestyle
+
+    second_choice = _parse_mode(parsed.get("second_choice"))
+    if second_choice == mode:
+        second_choice = None
+
+    confidence = _parse_confidence(parsed.get("confidence"))
+
+    return Classification(
+        mode=mode,
+        confidence=confidence,
+        second_choice=second_choice,
+        source="llm",
+    )
