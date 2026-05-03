@@ -650,6 +650,9 @@ class TestRouterDisambig:
                 assert body2["awaiting_clarification"] is False
                 assert body2["intent"] == "add_ingredient"
 
+                # Pending sentinel was cleared, not just downgraded
+                assert fake_db._tables["recipes"][0]["pending_clarification"] is None
+
             # Turn-2 LLM call must NOT receive a pending hint — router needs to
             # re-classify the user's choice from scratch.
             assert mock_gemini.captured[1]["pending_clarification"] is None

@@ -23,7 +23,8 @@ _client: AsyncGroq | None = None
 class _OpenAIPathRewriteTransport(httpx.AsyncHTTPTransport):
     """Rewrites the Groq SDK's /openai/v1/... path to /v1/... so the same
     SDK can talk to a local OpenAI-compatible server (e.g. Ollama) without
-    pulling in a second SDK. No-op against api.groq.com.
+    pulling in a second SDK. Only attached when LLM_BASE_URL points to a
+    non-Groq host — Groq's own endpoint requires the /openai/v1/ prefix.
     """
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
@@ -39,7 +40,11 @@ def get_client() -> AsyncGroq:
         kwargs: dict[str, Any] = {"api_key": config.LLM_API_KEY}
         if config.LLM_BASE_URL:
             kwargs["base_url"] = config.LLM_BASE_URL
-            kwargs["http_client"] = httpx.AsyncClient(transport=_OpenAIPathRewriteTransport())
+            # The path-rewrite transport only makes sense for non-Groq backends
+            # (Groq itself requires /openai/v1/). Skip it if the user explicitly
+            # set LLM_BASE_URL=https://api.groq.com — otherwise Groq would 404.
+            if "api.groq.com" not in config.LLM_BASE_URL:
+                kwargs["http_client"] = httpx.AsyncClient(transport=_OpenAIPathRewriteTransport())
         _client = AsyncGroq(**kwargs)
     return _client
 

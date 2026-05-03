@@ -126,7 +126,10 @@ async def _llm_classify(transcript: str) -> Classification:
         log.warning("router returned unknown mode=%r; defaulting to freestyle", parsed.get("mode"))
         mode = Mode.freestyle
 
-    second_choice = _parse_mode(parsed.get("second_choice"))
+    raw_second = parsed.get("second_choice")
+    second_choice = _parse_mode(raw_second)
+    if raw_second is not None and second_choice is None:
+        log.debug("router second_choice unparseable=%r — disambig will be skipped", raw_second)
     if second_choice == mode:
         second_choice = None
 

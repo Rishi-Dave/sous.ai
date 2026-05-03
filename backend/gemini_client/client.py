@@ -113,13 +113,15 @@ async def process_utterance(
     postprocess.apply(parsed)
     response = UtteranceResponse.model_validate(parsed)
 
-    # Surface low-confidence handler events to the structured log so they're
-    # reviewable independent of whether the handler itself opted to compose
-    # a disambiguation question (commit 6 wires that on freestyle).
+    # Surface low-confidence handler events from any LLM-backed handler.
+    # Threshold is the freestyle one for now (the only handler we route on);
+    # qa_llm / small_talk_llm log purely for observability — operators can
+    # spot a hallucinating qa response from the structured log without
+    # the disambiguation flow firing.
     if (
         response.confidence is not None
+        and response.source is not None
         and response.confidence < config.FREESTYLE_CONFIDENCE_THRESHOLD
-        and response.source == "freestyle_llm"
     ):
         best = response.disambiguation.best if response.disambiguation else response.intent.value
         second = response.disambiguation.second if response.disambiguation else None

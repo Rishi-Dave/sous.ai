@@ -8,6 +8,10 @@
 **/.env.local
 **/.env.*.local
 
+# Eval measurement artifact (regenerated on every run; not source)
+**/eval_results.json
+**/baseline_scores.proposed.json
+
 # Python
 **/.venv/
 **/__pycache__/

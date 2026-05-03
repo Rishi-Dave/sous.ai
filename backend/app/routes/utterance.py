@@ -114,6 +114,8 @@ async def process_utterance_endpoint(
     # Low-confidence disambiguation takes precedence: the model attached a
     # disambiguation marker, so persist the matching sentinel and skip the
     # usual ingredient/question branching (items will be empty for these).
+    # The threshold check happened upstream in gemini_client; this branch
+    # trusts the marker — if it's set, a clarification is warranted.
     if result.disambiguation is not None:
         if result.disambiguation.kind == "router":
             new_pending = _encode_router_disambig(
