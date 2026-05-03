@@ -118,5 +118,11 @@ async def test_case(case, scorecard):
         pytest.fail(f"[{case['id']}] {diff}")
 
     passed, diff = _compare(case, result)
-    scorecard.record(case, passed, diff)
+    scorecard.record(
+        case,
+        passed,
+        diff,
+        confidence=result.confidence,
+        confidence_source=result.source,
+    )
     assert passed, f"[{case['id']}] {diff}"

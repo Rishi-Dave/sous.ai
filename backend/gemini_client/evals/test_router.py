@@ -42,7 +42,14 @@ async def test_router(case):
         pending_clarification=case.get("pending_clarification"),
     )
     passed = classification.mode == expected
-    record_router_result(expected.value, passed)
+    record_router_result(
+        case_id=case["id"],
+        expected_mode=expected.value,
+        actual_mode=classification.mode.value,
+        passed=passed,
+        confidence=classification.confidence,
+        confidence_source=classification.source,
+    )
     assert passed, (
         f"[{case['id']}] expected_mode={expected.value} "
         f"got={classification.mode.value} "
