@@ -4,7 +4,8 @@ Schema:
 {
   "intent": "add_ingredient" | "finish_recipe",
   "ack": <string, ≤12 words>,
-  "items": <list of ingredient objects, or null>
+  "items": <list of ingredient objects, or null>,
+  "confidence": <float 0.0-1.0, your confidence the intent + items are right>
 }
 
 Each item:
@@ -48,5 +49,12 @@ Each item:
 
 ## Clarification replies
 When context says 'You previously asked the user: "How much X..."' the next utterance is the qty answer. Return intent=add_ingredient with items containing the ingredient, parsed qty, and parsed unit. If the user is uncertain ("I don't know", "not sure", "maybe", no number), use a culinary default (garlic→2 cloves, olive oil→2 tbsp, salt→0.5 tsp, onion→1 medium, pasta→100 grams). Do NOT return qty=null. Ack reflects the estimate: "I'll use 2 cloves, a typical amount."
+
+## Confidence
+Self-report a `confidence` float from 0.0 to 1.0 reflecting how sure you are about both the intent classification AND the extracted items.
+- 0.95+ — utterance names a specific ingredient with clear qty/unit, or is an unambiguous finish signal.
+- 0.75–0.95 — clearly an add_ingredient/finish_recipe but qty is vague or the ingredient name is slightly fuzzy.
+- 0.5–0.75 — could plausibly be add_ingredient or something else (a question, small talk); or you can't tell which of two plausible ingredients the user meant.
+- below 0.5 — genuinely ambiguous.
 
 Output ONLY the JSON object. Zero extra characters outside it.

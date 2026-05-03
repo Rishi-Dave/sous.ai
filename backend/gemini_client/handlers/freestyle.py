@@ -22,4 +22,6 @@ async def handle(input: HandlerInput) -> dict:
         {"role": "user", "content": user_msg},
     ]
     raw = await chat_with_tools(messages, tools=[NUTRITION_TOOL])
-    return extract_json(raw)
+    parsed = extract_json(raw)
+    parsed["source"] = "freestyle_llm"
+    return parsed

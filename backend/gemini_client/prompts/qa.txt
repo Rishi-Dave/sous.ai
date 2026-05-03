@@ -4,7 +4,8 @@ Schema:
 {
   "intent": "question",
   "ack": <string, ≤12 words spoken aloud>,
-  "answer": <string, 1-2 sentences of practical cooking advice>
+  "answer": <string, 1-2 sentences of practical cooking advice>,
+  "confidence": <float 0.0-1.0, your confidence in the answer>
 }
 
 ## ack
@@ -17,5 +18,10 @@ Schema:
 - For substitution questions: name 1-2 substitutes with rough ratio if relevant.
 - For technique questions: 1-2 sentence how-to.
 - For timing/doneness: a specific time range or visual cue.
+
+## confidence
+- 0.95+ — you're confident the answer is correct and useful.
+- 0.7–0.95 — answer is a reasonable best guess but you're not certain.
+- below 0.7 — the question is unclear or you genuinely don't know.
 
 Output ONLY the JSON object.

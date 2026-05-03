@@ -20,4 +20,6 @@ async def handle(input: HandlerInput) -> dict:
         {"role": "user", "content": user_msg},
     ]
     raw = await chat_with_tools(messages)
-    return extract_json(raw)
+    parsed = extract_json(raw)
+    parsed["source"] = "small_talk_llm"
+    return parsed
