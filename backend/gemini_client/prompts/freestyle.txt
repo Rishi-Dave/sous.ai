@@ -5,7 +5,8 @@ Schema:
   "intent": "add_ingredient" | "finish_recipe",
   "ack": <string, ≤12 words>,
   "items": <list of ingredient objects, or null>,
-  "confidence": <float 0.0-1.0, your confidence the intent + items are right>
+  "confidence": <float 0.0-1.0, your confidence the intent + items are right>,
+  "disambiguation": {"best": <string>, "second": <string>} | null
 }
 
 Each item:
@@ -50,11 +51,22 @@ Each item:
 ## Clarification replies
 When context says 'You previously asked the user: "How much X..."' the next utterance is the qty answer. Return intent=add_ingredient with items containing the ingredient, parsed qty, and parsed unit. If the user is uncertain ("I don't know", "not sure", "maybe", no number), use a culinary default (garlic→2 cloves, olive oil→2 tbsp, salt→0.5 tsp, onion→1 medium, pasta→100 grams). Do NOT return qty=null. Ack reflects the estimate: "I'll use 2 cloves, a typical amount."
 
+## Disambiguation replies
+When context says 'You previously asked the user: "Did you mean X or Y?" — their reply follows.', the next utterance is the user's choice between two ingredient candidates. Treat the chosen option as the user's actual ingredient and run normal extraction (intent=add_ingredient, items=[{name: chosen, ...}], qty=null if not stated). DO NOT echo a second disambiguation question.
+
 ## Confidence
 Self-report a `confidence` float from 0.0 to 1.0 reflecting how sure you are about both the intent classification AND the extracted items.
 - 0.95+ — utterance names a specific ingredient with clear qty/unit, or is an unambiguous finish signal.
 - 0.75–0.95 — clearly an add_ingredient/finish_recipe but qty is vague or the ingredient name is slightly fuzzy.
 - 0.5–0.75 — could plausibly be add_ingredient or something else (a question, small talk); or you can't tell which of two plausible ingredients the user meant.
 - below 0.5 — genuinely ambiguous.
+
+## Disambiguation (extraction-level)
+If your confidence is below 0.75 AND there are exactly two plausible ingredient interpretations of the same user phrase (examples: "cream" → heavy cream OR sour cream; "rice" → rice flour OR rice noodles; "vinegar" → white vinegar OR balsamic), emit:
+- `disambiguation`: {"best": "<top guess>", "second": "<runner-up>"}
+- `ack`: "Did you mean <best> or <second>?" (≤12 words)
+- `items`: [] (empty list — do NOT pick one and proceed)
+
+Only emit `disambiguation` for a genuine name-fork, not for missing-quantity (those go through the existing qty clarification flow with qty=null). When `disambiguation` is null, omit it or set it to null.
 
 Output ONLY the JSON object. Zero extra characters outside it.
