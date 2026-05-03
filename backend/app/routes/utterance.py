@@ -14,10 +14,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _INGREDIENT_PREFIX = "INGREDIENT_CLARIFICATION:"
+_ROUTER_DISAMBIG_PREFIX = "ROUTER_DISAMBIG:"
+_EXTRACTION_DISAMBIG_PREFIX = "EXTRACTION_DISAMBIG:"
 
 
 def _encode_ingredient_clarification(name: str, question: str) -> str:
     return f"{_INGREDIENT_PREFIX}{name}|{question}"
+
+
+def _encode_router_disambig(best: str, second: str, question: str) -> str:
+    return f"{_ROUTER_DISAMBIG_PREFIX}{best}|{second}|{question}"
+
+
+def _encode_extraction_disambig(best: str, second: str, question: str) -> str:
+    return f"{_EXTRACTION_DISAMBIG_PREFIX}{best}|{second}|{question}"
 
 
 def _decode_pending(pending: str | None) -> tuple[str, str | None]:
@@ -25,12 +35,26 @@ def _decode_pending(pending: str | None) -> tuple[str, str | None]:
         body = pending[len(_INGREDIENT_PREFIX):]
         name, _, _ = body.partition("|")
         return "ingredient", name
+    if pending and pending.startswith(_ROUTER_DISAMBIG_PREFIX):
+        return "router_disambig", None
+    if pending and pending.startswith(_EXTRACTION_DISAMBIG_PREFIX):
+        return "extraction_disambig", None
     return "question", None
 
 
 def _pending_display_text(pending: str) -> str:
     if pending.startswith(_INGREDIENT_PREFIX):
         _, _, question = pending.partition("|")
+        return question
+    if pending.startswith(_ROUTER_DISAMBIG_PREFIX):
+        body = pending[len(_ROUTER_DISAMBIG_PREFIX):]
+        _, _, rest = body.partition("|")
+        _, _, question = rest.partition("|")
+        return question
+    if pending.startswith(_EXTRACTION_DISAMBIG_PREFIX):
+        body = pending[len(_EXTRACTION_DISAMBIG_PREFIX):]
+        _, _, rest = body.partition("|")
+        _, _, question = rest.partition("|")
         return question
     return pending
 
@@ -60,6 +84,14 @@ async def process_utterance_endpoint(
     pending_kind, clarification_name = _decode_pending(pending_clarification)
     llm_pending = _pending_display_text(pending_clarification) if pending_clarification else None
 
+    # Router-disambig replies should re-classify from scratch — the user has
+    # picked a mode, so we clear the pending hint and let the router run on
+    # the new utterance. Extraction-disambig replies keep llm_pending so the
+    # freestyle prompt's "Disambiguation replies" section can interpret the
+    # chosen option.
+    if pending_kind == "router_disambig":
+        llm_pending = None
+
     ingredients_resp = db.table("ingredients").select("*").eq("recipe_id", session_id).execute()
     session_ingredients = [_db_row_to_ingredient(r) for r in (ingredients_resp.data or [])]
 
@@ -79,7 +111,36 @@ async def process_utterance_endpoint(
     new_pending: str | None = None
     tts_ack = result.ack  # may be overridden below when a clarification question is synthesized
 
-    if result.intent == Intent.add_ingredient and result.items:
+    # Low-confidence disambiguation takes precedence: the model attached a
+    # disambiguation marker, so persist the matching sentinel and skip the
+    # usual ingredient/question branching (items will be empty for these).
+    if result.disambiguation is not None:
+        if result.disambiguation.kind == "router":
+            new_pending = _encode_router_disambig(
+                result.disambiguation.best,
+                result.disambiguation.second,
+                result.ack,
+            )
+            logger.info(
+                "router_disambig | best=%s second=%s ack=%r",
+                result.disambiguation.best,
+                result.disambiguation.second,
+                result.ack,
+            )
+        else:  # extraction
+            new_pending = _encode_extraction_disambig(
+                result.disambiguation.best,
+                result.disambiguation.second,
+                result.ack,
+            )
+            logger.info(
+                "extraction_disambig | best=%s second=%s ack=%r",
+                result.disambiguation.best,
+                result.disambiguation.second,
+                result.ack,
+            )
+        db.table("recipes").update({"pending_clarification": new_pending}).eq("recipe_id", session_id).execute()
+    elif result.intent == Intent.add_ingredient and result.items:
         is_resolving = pending_kind == "ingredient" and clarification_name is not None
         logger.info("clarification | is_resolving=%s clarification_name=%s", is_resolving, clarification_name)
 

@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from app.deps import get_db, get_gemini_client, get_tts
 from app.main import app
 from gemini_client import Intent, ParsedIngredient, UtteranceResponse
+from gemini_client.schemas import Disambiguation
 
 
 # ---------------------------------------------------------------------------
@@ -567,5 +568,138 @@ class TestSessionLifecycle:
 
             # Turn 2 belongs to session B; pending_clarification must be None
             assert mock_gemini.captured[1]["pending_clarification"] is None
+        finally:
+            self._clear()
+
+
+# ---------------------------------------------------------------------------
+# Disambiguation flows — the second shape of clarification
+# ---------------------------------------------------------------------------
+
+_ROUTER_DISAMBIG = UtteranceResponse(
+    intent=Intent.acknowledgment,
+    ack="Did you mean to add an ingredient or ask a cooking question?",
+    items=None,
+    confidence=0.55,
+    source="router_llm",
+    disambiguation=Disambiguation(kind="router", best="freestyle", second="qa"),
+)
+
+_AFTER_ROUTER_PICK = UtteranceResponse(
+    intent=Intent.add_ingredient,
+    ack="Got it, two cloves of garlic.",
+    items=[ParsedIngredient(name="garlic", qty=2.0, unit="clove", raw_phrase="two cloves of garlic")],
+    confidence=0.95,
+    source="freestyle_llm",
+)
+
+_EXTRACTION_DISAMBIG = UtteranceResponse(
+    intent=Intent.add_ingredient,
+    ack="Did you mean heavy cream or sour cream?",
+    items=[],
+    confidence=0.6,
+    source="freestyle_llm",
+    disambiguation=Disambiguation(kind="extraction", best="heavy cream", second="sour cream"),
+)
+
+_AFTER_EXTRACTION_PICK = UtteranceResponse(
+    intent=Intent.add_ingredient,
+    ack="Got it, half a cup of heavy cream.",
+    items=[ParsedIngredient(name="heavy cream", qty=0.5, unit="cup", raw_phrase="heavy cream")],
+    confidence=0.92,
+    source="freestyle_llm",
+)
+
+
+class TestRouterDisambig:
+    """Router-level disambiguation: low-confidence classification → ask the user."""
+
+    def _overrides(self, fake_tts, mock_gemini, fake_db):
+        app.dependency_overrides[get_gemini_client] = lambda: mock_gemini
+        app.dependency_overrides[get_tts] = lambda: fake_tts
+        app.dependency_overrides[get_db] = lambda: fake_db
+
+    def _clear(self):
+        app.dependency_overrides.clear()
+
+    def test_router_disambig_two_turn_loop(self):
+        """Turn 1: ambiguous utterance → router disambig question + awaiting_clarification.
+        Turn 2: user picks; LLM receives pending_clarification=None (re-classify fresh).
+        Pending is cleared after a normal handler response.
+        """
+        fake_tts = _FakeTTS()
+        mock_gemini = _make_sequential_gemini(_ROUTER_DISAMBIG, _AFTER_ROUTER_PICK)
+        fake_db = _FakeDB()
+
+        self._overrides(fake_tts, mock_gemini, fake_db)
+        try:
+            with TestClient(app) as c:
+                session_id = _new_session(c)
+
+                body1 = _post(c, session_id)
+                assert body1["awaiting_clarification"] is True
+                assert fake_tts.last_stashed == "Did you mean to add an ingredient or ask a cooking question?"
+
+                # Sentinel was persisted with the right prefix
+                stored = fake_db._tables["recipes"][0]["pending_clarification"]
+                assert stored is not None
+                assert stored.startswith("ROUTER_DISAMBIG:")
+                assert "freestyle" in stored and "qa" in stored
+
+                body2 = _post(c, session_id)
+                assert body2["awaiting_clarification"] is False
+                assert body2["intent"] == "add_ingredient"
+
+            # Turn-2 LLM call must NOT receive a pending hint — router needs to
+            # re-classify the user's choice from scratch.
+            assert mock_gemini.captured[1]["pending_clarification"] is None
+        finally:
+            self._clear()
+
+
+class TestExtractionDisambig:
+    """Extraction-level disambiguation: ambiguous ingredient name → ask the user."""
+
+    def _overrides(self, fake_tts, mock_gemini, fake_db):
+        app.dependency_overrides[get_gemini_client] = lambda: mock_gemini
+        app.dependency_overrides[get_tts] = lambda: fake_tts
+        app.dependency_overrides[get_db] = lambda: fake_db
+
+    def _clear(self):
+        app.dependency_overrides.clear()
+
+    def test_extraction_disambig_two_turn_loop(self):
+        """Turn 1: 'cream' → freestyle disambig. Turn 2: user picks; freestyle prompt
+        sees the question text and parses the choice; pending cleared."""
+        fake_tts = _FakeTTS()
+        mock_gemini = _make_sequential_gemini(_EXTRACTION_DISAMBIG, _AFTER_EXTRACTION_PICK)
+        fake_db = _FakeDB()
+
+        self._overrides(fake_tts, mock_gemini, fake_db)
+        try:
+            with TestClient(app) as c:
+                session_id = _new_session(c)
+
+                body1 = _post(c, session_id)
+                assert body1["awaiting_clarification"] is True
+                assert fake_tts.last_stashed == "Did you mean heavy cream or sour cream?"
+
+                stored = fake_db._tables["recipes"][0]["pending_clarification"]
+                assert stored is not None
+                assert stored.startswith("EXTRACTION_DISAMBIG:")
+                assert "heavy cream" in stored and "sour cream" in stored
+
+                body2 = _post(c, session_id)
+                assert body2["awaiting_clarification"] is False
+                assert body2["intent"] == "add_ingredient"
+
+                # Heavy cream landed in the session
+                names = [i["name"] for i in body2["current_ingredients"]]
+                assert "heavy cream" in names
+
+            # Turn 2: LLM receives the question text (display only), NEVER the sentinel
+            turn2_pending = mock_gemini.captured[1]["pending_clarification"]
+            assert turn2_pending == "Did you mean heavy cream or sour cream?"
+            assert "EXTRACTION_DISAMBIG:" not in (turn2_pending or "")
         finally:
             self._clear()
