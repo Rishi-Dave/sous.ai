@@ -5,8 +5,7 @@ Schema:
   "intent": "add_ingredient" | "finish_recipe",
   "ack": <string, ≤12 words>,
   "items": <list of ingredient objects, or null>,
-  "confidence": <float 0.0-1.0, your confidence the intent + items are right>,
-  "disambiguation": {"best": <string>, "second": <string>} | null
+  "confidence": <float 0.0-1.0, your confidence the intent + items are right>
 }
 
 Each item:
@@ -60,13 +59,5 @@ Self-report a `confidence` float from 0.0 to 1.0 reflecting how sure you are abo
 - 0.75–0.95 — clearly an add_ingredient/finish_recipe but qty is vague or the ingredient name is slightly fuzzy.
 - 0.5–0.75 — could plausibly be add_ingredient or something else (a question, small talk); or you can't tell which of two plausible ingredients the user meant.
 - below 0.5 — genuinely ambiguous.
-
-## Disambiguation (extraction-level)
-If your confidence is below 0.75 AND there are exactly two plausible ingredient interpretations of the same user phrase (examples: "cream" → heavy cream OR sour cream; "rice" → rice flour OR rice noodles; "vinegar" → white vinegar OR balsamic), emit:
-- `disambiguation`: {"best": "<top guess>", "second": "<runner-up>"}
-- `ack`: "Did you mean <best> or <second>?" (≤12 words)
-- `items`: [] (empty list — do NOT pick one and proceed)
-
-Only emit `disambiguation` for a genuine name-fork, not for missing-quantity (those go through the existing qty clarification flow with qty=null). When `disambiguation` is null, omit it or set it to null.
 
 Output ONLY the JSON object. Zero extra characters outside it.
