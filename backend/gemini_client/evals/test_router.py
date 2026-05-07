@@ -36,13 +36,23 @@ CASES = _load_router_cases()
 )
 async def test_router(case):
     expected = expected_mode_for(case)
-    actual = await classify(
+    classification = await classify(
         transcript=case["utterance_text"],
         session_ingredients=[],
         pending_clarification=case.get("pending_clarification"),
     )
-    passed = actual == expected
-    record_router_result(expected.value, passed)
+    passed = classification.mode == expected
+    record_router_result(
+        case_id=case["id"],
+        expected_mode=expected.value,
+        actual_mode=classification.mode.value,
+        passed=passed,
+        confidence=classification.confidence,
+        confidence_source=classification.source,
+    )
     assert passed, (
-        f"[{case['id']}] expected_mode={expected.value} got={actual.value}"
+        f"[{case['id']}] expected_mode={expected.value} "
+        f"got={classification.mode.value} "
+        f"confidence={classification.confidence} "
+        f"source={classification.source}"
     )

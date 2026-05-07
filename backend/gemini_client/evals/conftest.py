@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
@@ -25,6 +26,8 @@ from gemini_client.router import Mode
 EVALS_DIR = Path(__file__).parent
 UTTERANCES_PATH = EVALS_DIR / "utterances.yaml"
 BASELINE_PATH = EVALS_DIR / "baseline_scores.json"
+
+_RATE_LIMIT_DELAY = float(os.environ.get("EVAL_RATE_LIMIT_DELAY", "1.5"))
 
 
 # Default Mode per eval category. The router test uses this as the expected
@@ -57,10 +60,15 @@ def expected_mode_for(case: dict) -> Mode | None:
 
 @pytest.fixture(autouse=True)
 async def rate_limit_buffer():
-    """Sleep 1.5s after each test. Groq free tier throttles aggressively;
-    this mirrors the sleep in backend/gemini_client/tests/test_utterances.py."""
+    """Sleep between tests to respect provider rate limits.
+
+    Default 1.5s mirrors the Groq free-tier sleep used elsewhere in tests.
+    Override via EVAL_RATE_LIMIT_DELAY (e.g. set to 0 when iterating against
+    a local Ollama).
+    """
     yield
-    await asyncio.sleep(1.5)
+    if _RATE_LIMIT_DELAY > 0:
+        await asyncio.sleep(_RATE_LIMIT_DELAY)
 
 
 @dataclass
@@ -70,13 +78,22 @@ class CaseResult:
     category: str
     passed: bool
     diff: str
+    confidence: float | None = None
+    confidence_source: str | None = None
 
 
 class Scorecard:
     def __init__(self) -> None:
         self.results: list[CaseResult] = []
 
-    def record(self, case: dict, passed: bool, diff: str) -> None:
+    def record(
+        self,
+        case: dict,
+        passed: bool,
+        diff: str,
+        confidence: float | None = None,
+        confidence_source: str | None = None,
+    ) -> None:
         self.results.append(
             CaseResult(
                 case_id=case["id"],
@@ -84,6 +101,8 @@ class Scorecard:
                 category=case.get("category", case["expected_intent"]),
                 passed=passed,
                 diff=diff,
+                confidence=confidence,
+                confidence_source=confidence_source,
             )
         )
 
@@ -113,14 +132,33 @@ _SCORECARD = Scorecard()
 # Router eval results — keyed on expected mode, list of pass bools per case.
 _ROUTER_RESULTS: dict[str, list[bool]] = defaultdict(list)
 
+# Full per-case records for the router eval. Mirrors _SCORECARD.results in
+# spirit but for the router-only suite, which doesn't pass through Scorecard.
+_ROUTER_CASES: list[dict] = []
+
 
 @pytest.fixture(scope="session")
 def scorecard() -> Scorecard:
     return _SCORECARD
 
 
-def record_router_result(expected_mode: str, passed: bool) -> None:
+def record_router_result(
+    case_id: str,
+    expected_mode: str,
+    actual_mode: str,
+    passed: bool,
+    confidence: float | None = None,
+    confidence_source: str | None = None,
+) -> None:
     _ROUTER_RESULTS[expected_mode].append(passed)
+    _ROUTER_CASES.append({
+        "id": case_id,
+        "expected_mode": expected_mode,
+        "actual_mode": actual_mode,
+        "passed": passed,
+        "confidence": confidence,
+        "confidence_source": confidence_source,
+    })
 
 
 def _load_baseline() -> dict:
@@ -155,6 +193,7 @@ def pytest_sessionfinish(session, exitstatus):
     if _ROUTER_RESULTS:
         _report_router_scorecard(reporter, baseline, tol, session)
         if not sc.results:
+            _write_eval_results_json(sc, baseline)
             return
 
     reporter.write_sep("=", "Gemini eval scorecard")
@@ -184,7 +223,11 @@ def pytest_sessionfinish(session, exitstatus):
         reporter.write_line("")
         reporter.write_line(f"Failures ({len(fails)}):")
         for r in fails:
-            reporter.write_line(f"  [{r.case_id}] {r.diff}")
+            conf_str = f" conf={r.confidence:.2f}" if r.confidence is not None else ""
+            reporter.write_line(f"  [{r.case_id}]{conf_str} {r.diff}")
+
+    _report_calibration(reporter, sc)
+    _write_eval_results_json(sc, baseline)
 
     # Regression gate
     #
@@ -218,6 +261,87 @@ def pytest_sessionfinish(session, exitstatus):
             f"{proposed_path.name}. Review, adjust the 'notes' field, "
             f"then rename to baseline_scores.json and commit."
         )
+
+
+def _report_calibration(reporter, sc: Scorecard) -> None:
+    """Per-confidence-bucket pass/fail breakdown.
+
+    The point: when the model gets a case wrong, did it know it was unsure?
+    A misclassification with confidence < threshold is a "would-be-saved by
+    disambiguation" case. A misclassification with confidence >= 0.85 is a
+    "confidently wrong" case — the deeper problem the threshold can't fix.
+    """
+    rated = [r for r in sc.results if r.confidence is not None]
+    if not rated:
+        return
+
+    reporter.write_line("")
+    reporter.write_sep("=", "Calibration report")
+
+    passes = [r for r in rated if r.passed]
+    fails = [r for r in rated if not r.passed]
+
+    def _stats(rs: list) -> str:
+        if not rs:
+            return "(none)"
+        vs = sorted(r.confidence for r in rs)
+        mean = sum(vs) / len(vs)
+        median = vs[len(vs) // 2]
+        return f"n={len(vs)} mean={mean:.3f} median={median:.3f} min={vs[0]:.2f} max={vs[-1]:.2f}"
+
+    reporter.write_line(f"  Passes:   {_stats(passes)}")
+    reporter.write_line(f"  Failures: {_stats(fails)}")
+
+    buckets = [(0.0, 0.5), (0.5, 0.7), (0.7, 0.85), (0.85, 1.01)]
+    reporter.write_line("")
+    reporter.write_line("  Failures by confidence:")
+    for lo, hi in buckets:
+        in_bucket = [r for r in fails if lo <= r.confidence < hi]
+        if not in_bucket:
+            continue
+        label = f"  [{lo:.2f}, {hi:.2f})"
+        reporter.write_line(f"  {label:<18} {len(in_bucket):>3} cases")
+        for r in in_bucket:
+            reporter.write_line(
+                f"      [{r.case_id}] conf={r.confidence:.2f} "
+                f"src={r.confidence_source} {r.diff}"
+            )
+
+    confidently_wrong = [r for r in fails if r.confidence >= 0.85]
+    saveable = [r for r in fails if r.confidence < 0.85]
+    reporter.write_line("")
+    reporter.write_line(
+        f"  Saveable-by-disambig (conf<0.85): {len(saveable)}    "
+        f"Confidently-wrong (conf>=0.85): {len(confidently_wrong)}"
+    )
+
+
+def _write_eval_results_json(sc: Scorecard, baseline: dict) -> None:
+    """Write a per-case sidecar so suggest_thresholds.py and any future
+    analysis can read structured results without re-running the suite."""
+    if not sc.results and not _ROUTER_CASES:
+        return
+    payload = {
+        "measured_on": date.today().isoformat(),
+        "model_snapshot": baseline.get("model_snapshot", "unknown") if baseline else "unknown",
+        "eval": [
+            {
+                "id": r.case_id,
+                "intent": r.intent,
+                "category": r.category,
+                "passed": r.passed,
+                "diff": r.diff,
+                "confidence": r.confidence,
+                "confidence_source": r.confidence_source,
+            }
+            for r in sc.results
+        ],
+        "router": list(_ROUTER_CASES),
+    }
+    out = EVALS_DIR / "eval_results.json"
+    with out.open("w") as f:
+        json.dump(payload, f, indent=2)
+        f.write("\n")
 
 
 def _report_router_scorecard(reporter, baseline: dict, tol: float, session) -> None:

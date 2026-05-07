@@ -6,6 +6,7 @@ clarification-reply parsing) and the user-said-they're-done signal.
 
 from pathlib import Path
 
+from .. import config
 from .._groq import chat_with_tools, extract_json
 from ..nutrition_tool import NUTRITION_TOOL
 from .base import HandlerInput
@@ -21,5 +22,21 @@ async def handle(input: HandlerInput) -> dict:
         {"role": "system", "content": _PROMPT},
         {"role": "user", "content": user_msg},
     ]
-    raw = await chat_with_tools(messages, tools=[NUTRITION_TOOL])
-    return extract_json(raw)
+    tools = None if config.LLM_TOOLS_DISABLED else [NUTRITION_TOOL]
+    raw = await chat_with_tools(messages, tools=tools)
+    parsed = extract_json(raw)
+    parsed["source"] = "freestyle_llm"
+
+    # Stamp the disambiguation kind so the route layer's encoder knows which
+    # sentinel to write. The prompt only emits {best, second}; the handler
+    # owns the kind label since it's a backend-internal concept.
+    # Malformed dicts (missing best/second) are dropped — surfacing them
+    # would 502 via the Pydantic validator and confuse the route layer's
+    # soft-fall, hiding the prompt regression.
+    disambig = parsed.get("disambiguation")
+    if isinstance(disambig, dict) and "best" in disambig and "second" in disambig:
+        disambig["kind"] = "extraction"
+    else:
+        parsed.pop("disambiguation", None)
+
+    return parsed
