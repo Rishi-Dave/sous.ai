@@ -57,6 +57,39 @@ flowchart LR
 
 The phone is the **only** client that talks to the backend; the backend is the **only** server that talks to Gemini, Edamam, ElevenLabs, or Supabase. This keeps secrets off the device and lets us reason about the system as a single orchestrator.
 
+### Interface · Engine · Storage
+
+```mermaid
+flowchart LR
+    subgraph Interface
+        I1["Porcupine · expo-av · VAD"]
+        I2["4-state reducer"]
+        I3["Expo Router screens"]
+        I4["typed backend client"]
+    end
+
+    subgraph Engine
+        E1["FastAPI routes\n/sessions · /utterance · /finalize"]
+        E2["gemini_client\nNLU + clarification"]
+        E3["ElevenLabs · Edamam\nTTS + macros"]
+    end
+
+    subgraph Storage
+        S1["profiles"]
+        S2["recipes"]
+        S3["ingredients"]
+        S4["macro_logs"]
+    end
+
+    Interface -- "audio + session" --> Engine
+    Engine -. "spoken response" .-> Interface
+    Engine <-->|"read / write"| Storage
+
+    style Interface fill:#FFFDE8,stroke:#1A472A
+    style Engine fill:#E8F5E9,stroke:#1A472A
+    style Storage fill:#F3F3F3,stroke:#888
+```
+
 ## State machine
 
 ```mermaid
